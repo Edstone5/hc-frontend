@@ -12,6 +12,8 @@ import {
   deleteOdontogramaEntrada,
   fetchOdontogramaSvg,
   addOdontogramaSvg,
+  fetchIhoS,
+  saveIhoS,
   fetchPrescripciones,
   addPrescripcion,
   deletePrescripcion,
@@ -111,6 +113,23 @@ export const useAddOdontogramaSvg = () => {
     mutationFn: addOdontogramaSvg,
     onSuccess: (_, v) =>
       qc.invalidateQueries({ queryKey: ['odontograma-svg', v.idHistory] }),
+  });
+};
+
+// ── IHO-S (Índice de Higiene Oral Simplificado) ───────────────────────────────
+export const useIhoS = (id) =>
+  useQuery({
+    queryKey: ['iho-s', id],
+    queryFn: () => fetchIhoS(id),
+    enabled: !!id,
+    refetchOnWindowFocus: false,
+  });
+export const useSaveIhoS = () => {
+  const qc = useQueryClient();
+  return useMutation({
+    mutationFn: saveIhoS,
+    onSuccess: (_, v) =>
+      qc.invalidateQueries({ queryKey: ['iho-s', v.idHistory] }),
   });
 };
 

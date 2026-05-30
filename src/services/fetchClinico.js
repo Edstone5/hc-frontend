@@ -48,6 +48,18 @@ export const addOdontogramaSvg = ({ idHistory, data }) =>
     ...opts,
   }).then(handleResponse);
 
+// ── IHO-S (Índice de Higiene Oral Simplificado) ───────────────────────────────
+export const fetchIhoS = (idHistory) =>
+  fetch(`${API}/hc/${idHistory}/iho-s`, opts).then(handleResponse);
+
+export const saveIhoS = ({ idHistory, data }) =>
+  fetch(`${API}/hc/${idHistory}/iho-s`, {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify(data),
+    ...opts,
+  }).then(handleResponse);
+
 // ── PRESCRIPCIONES ───────────────────────────────────────────────────────────
 export const fetchPrescripciones = (id) =>
   fetch(`${API}/hc/${id}/prescripciones`, opts).then(handleResponse);

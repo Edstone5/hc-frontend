@@ -15,6 +15,7 @@ import React, { useEffect, useState, useCallback } from 'react';
 import { useParams } from 'react-router';
 import toast from 'react-hot-toast';
 import OdontogramaToolsPanel from './odotools';
+import IhoSPanel from './IhoSPanel';
 import { HALLAZGOS_ODONTO, HALLAZGO_LABEL } from './hallazgosOdonto';
 import { calcularIndices } from './indicesOdonto';
 import {
@@ -2270,6 +2271,9 @@ export default function Odontograma() {
           </div>
         )}
       </div>
+
+      {/* ── IHO-S (Bloque 4) ──────────────────────────────────────────────── */}
+      <IhoSPanel patientId={patientId} />
 
       {/* ── REGISTRO DE INTERVENCIONES EN BD (RF-06) ────────────────────────
         Sección integrada desde OdontogramaPage.jsx.
