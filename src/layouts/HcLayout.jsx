@@ -18,20 +18,28 @@ function HcLayout() {
 
   const menuItems = [
     { path: `/historia/${id}/anamnesis`, label: 'Anamnesis' },
-    { path: `/historia/${id}/examen-fisico`, label: 'Examen Fisico' },
+    { path: `/historia/${id}/examen-fisico`, label: 'Examen Físico' },
+    { path: `/historia/${id}/odontograma`, label: 'Odontograma' },
     {
       path: `/historia/${id}/diagnostico-presuntivo`,
       label: 'Diagnósticos presuntivos',
     },
     {
       path: `/historia/${id}/derivacion-clinicas`,
-      label: 'Derivado a clinicas',
+      label: 'Derivado a clínicas',
     },
     {
       path: `/historia/${id}/diagnostico-clinicas`,
-      label: 'Diagnostico en clinicas',
+      label: 'Diagnóstico en clínicas',
     },
     { path: `/historia/${id}/evolucion`, label: 'Evoluciones' },
+    { path: `/historia/${id}/medicamentos`, label: 'Medicamentos' },
+    { path: `/historia/${id}/fichas-operacion`, label: 'Fichas de operación' },
+    { path: `/historia/${id}/fichas-evaluacion`, label: 'Evaluaciones' },
+    { path: `/historia/${id}/citas`, label: 'Citas' },
+    { path: `/historia/${id}/adjuntos`, label: 'Adjuntos' },
+    { path: `/historia/${id}/validacion`, label: 'Validación docente' },
+    { path: `/historia/${id}/historial`, label: 'Historial de versiones' },
   ];
 
   return (

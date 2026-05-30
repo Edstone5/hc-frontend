@@ -27,6 +27,27 @@ import CreateStudent from './pages/Admin/CreateStudent.jsx';
 import StudentDetailPage from './pages/Admin/StudentDetailPage.jsx';
 import Odonto from './pages/hc/ExamenFisico/odonto.jsx';
 
+// ── Fase 1: Admin ──────────────────────────────────────────────────────────
+import Busqueda from './pages/Admin/Busqueda.jsx';
+import Reportes from './pages/Admin/Reportes.jsx';
+import Equipos from './pages/Admin/Equipos.jsx';
+
+// ── Fase 2: Módulos clínicos ──────────────────────────────────────────────
+import OdontogramaPage from './pages/hc/Odontograma/OdontogramaPage.jsx';
+import Medicamentos from './pages/hc/Medicamentos/Medicamentos.jsx';
+import Adjuntos from './pages/hc/Adjuntos/Adjuntos.jsx';
+import FichaOperacion from './pages/hc/FichaOperacion/FichaOperacion.jsx';
+import FichaEvaluacion from './pages/hc/FichaEvaluacion/FichaEvaluacion.jsx';
+
+// ── Fase 3: Coordinación ──────────────────────────────────────────────────
+import Citas from './pages/hc/Citas/Citas.jsx';
+import ValidacionDocente from './pages/hc/ValidacionDocente/ValidacionDocente.jsx';
+import TransferirHC from './pages/Admin/TransferirHC.jsx';
+
+// ── Fase 4: Reportes / PDF ────────────────────────────────────────────────
+import HistorialVersiones from './pages/hc/HistorialVersiones/HistorialVersiones.jsx';
+import DashboardDocente from './pages/Docente/DashboardDocente.jsx';
+
 function App() {
   return (
     <>
@@ -42,14 +63,25 @@ function App() {
             <Route path="/dashboard" element={<Dashboard />} />
           </Route>
 
+          {/* ── Panel de Docente ── */}
+          <Route element={<StudentLayout />}>
+            <Route path="/docente/dashboard" element={<DashboardDocente />} />
+          </Route>
+
+          {/* ── Panel de Administración ── */}
           <Route element={<AdminLayout />}>
             <Route path="/admin" element={<AdminDashboard />} />
             <Route path="/admin/create-student" element={<CreateStudent />} />
             <Route path="/admin/student/:id" element={<StudentDetailPage />} />
+            <Route path="/admin/busqueda" element={<Busqueda />} />
+            <Route path="/admin/reportes" element={<Reportes />} />
+            <Route path="/admin/equipos" element={<Equipos />} />
+            <Route path="/admin/transferir/:id" element={<TransferirHC />} />
           </Route>
 
+          {/* ── Historia Clínica ── */}
           <Route element={<HcLayout />}>
-            {/* Rutas de Anamnesis */}
+            {/* Anamnesis */}
             <Route path="/historia/:id/anamnesis" element={<Anamnesis />} />
             <Route
               path="/historia/:id/anamnesis/antecedente-personal"
@@ -68,7 +100,7 @@ function App() {
               element={<Enfermedad_Actual />}
             />
 
-            {/* NUEVAS RUTAS DE EXAMEN FÍSICO */}
+            {/* Examen Físico */}
             <Route
               path="/historia/:id/examen-fisico"
               element={<ExamenFisicoMenu />}
@@ -93,6 +125,8 @@ function App() {
               path="/historia/:id/examen-fisico/odonto"
               element={<Odonto />}
             />
+
+            {/* Diagnóstico y Evolución */}
             <Route
               path="/historia/:id/diagnostico-presuntivo"
               element={<DiagnosticoPresuntivo />}
@@ -106,9 +140,42 @@ function App() {
               element={<DiagnosticoClinicas />}
             />
             <Route path="/historia/:id/evolucion" element={<Evolucion />} />
+
+            {/* ── Fase 2: Módulos clínicos nuevos ── */}
+            <Route
+              path="/historia/:id/odontograma"
+              element={<OdontogramaPage />}
+            />
+            <Route
+              path="/historia/:id/medicamentos"
+              element={<Medicamentos />}
+            />
+            <Route path="/historia/:id/adjuntos" element={<Adjuntos />} />
+            <Route
+              path="/historia/:id/fichas-operacion"
+              element={<FichaOperacion />}
+            />
+            <Route
+              path="/historia/:id/fichas-evaluacion"
+              element={<FichaEvaluacion />}
+            />
+
+            {/* ── Fase 3: Coordinación ── */}
+            <Route path="/historia/:id/citas" element={<Citas />} />
+            <Route
+              path="/historia/:id/validacion"
+              element={<ValidacionDocente />}
+            />
+
+            {/* ── Fase 4: Historial ── */}
+            <Route
+              path="/historia/:id/historial"
+              element={<HistorialVersiones />}
+            />
           </Route>
         </Route>
       </Routes>
+
       <Toaster
         position="bottom-right"
         toastOptions={{
@@ -121,20 +188,10 @@ function App() {
             padding: '1rem',
             fontSize: '0.875rem',
             boxShadow:
-              '0 10px 15px -3px rgba(0, 0, 0, 0.1), 0 4px 6px -2px rgba(0, 0, 0, 0.05)',
+              '0 10px 15px -3px rgba(0,0,0,0.1),0 4px 6px -2px rgba(0,0,0,0.05)',
           },
-          success: {
-            iconTheme: {
-              primary: '#10b981',
-              secondary: '#fff',
-            },
-          },
-          error: {
-            iconTheme: {
-              primary: '#ef4444',
-              secondary: '#fff',
-            },
-          },
+          success: { iconTheme: { primary: '#10b981', secondary: '#fff' } },
+          error: { iconTheme: { primary: '#ef4444', secondary: '#fff' } },
         }}
       />
       <ReactQueryDevtools initialIsOpen={false} />

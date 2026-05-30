@@ -117,7 +117,7 @@ function BloodTypeSelectorComponent({ value, onChange }) {
       className="border-2 border-[var(--color-primary-soft)] rounded-md px-3 py-2 focus:outline-none focus:border-[var(--color-primary)]"
     >
       <option value="">Seleccione grupo sanguíneo</option>
-      {bloodTypeData?.data?.map((item) => (
+      {bloodTypeData?.map((item) => (
         <option
           key={item.nombre || item.descripcion}
           value={item.nombre || item.descripcion}

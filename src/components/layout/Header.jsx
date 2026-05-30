@@ -1,6 +1,7 @@
 import { LogOut } from 'lucide-react';
 import toast from 'react-hot-toast';
 import { fetchLogout } from '../../services/fetchLogout';
+import NotificacionBell from '../Notificaciones/NotificacionBell.jsx';
 
 export default function Header() {
   const handleLogout = async () => {
@@ -23,7 +24,8 @@ export default function Header() {
           BASADRINA
         </div>
       </div>
-      <div className="flex items-center">
+      <div className="flex items-center gap-3 text-white">
+        <NotificacionBell />
         <LogOut
           className="text-2xl cursor-pointer !text-[var(--color-white)] hover:opacity-80 transition-opacity duration-200"
           onClick={handleLogout}

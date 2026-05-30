@@ -265,7 +265,7 @@ function Filiacion() {
               className="form-select"
             >
               <option value="">Seleccione sexo</option>
-              {sexoCatalog?.data?.map((item) => (
+              {sexoCatalog?.map((item) => (
                 <option
                   key={item.id_sexo || item.descripcion}
                   value={item.descripcion}
@@ -311,7 +311,7 @@ function Filiacion() {
               className="form-select"
             >
               <option value="">Seleccione estado civil</option>
-              {estadoCivilCatalog?.data?.map((item) => (
+              {estadoCivilCatalog?.map((item) => (
                 <option
                   key={item.id_estado_civil || item.descripcion}
                   value={item.descripcion}
@@ -344,7 +344,7 @@ function Filiacion() {
               className="form-select"
             >
               <option value="">Seleccione ocupación</option>
-              {ocupacionCatalog?.data?.map((item) => (
+              {ocupacionCatalog?.map((item) => (
                 <option
                   key={item.id_ocupacion || item.descripcion}
                   value={item.descripcion}
