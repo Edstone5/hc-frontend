@@ -19,10 +19,19 @@ import {
   useOdontograma,
   useAddOdontogramaEntrada,
   useDeleteOdontogramaEntrada,
+  useOdontogramaSvg,
+  useAddOdontogramaSvg,
 } from '@hooks/useClinico';
 
 // ── Constantes para el formulario de registro de BD ──────────────────────────
 const SUPERFICIES = ['vestibular', 'lingual', 'mesial', 'distal', 'oclusal'];
+
+// Tipos de odontograma según RF-06 / NTS N° 150-MINSA:
+//   INICIAL   → estado en que llegó el paciente (uno por historia)
+//   EVOLUCION → cambios/tratamientos por sesión (varios por historia)
+const TIPO_INICIAL = 'INICIAL';
+const TIPO_EVOLUCION = 'EVOLUCION';
+
 const FORM_INICIAL = {
   numeroDiente: '',
   superficie: '',
@@ -68,6 +77,16 @@ export default function Odontograma() {
   const { mutate: agregarEntrada, isPending: agregando } =
     useAddOdontogramaEntrada();
   const { mutate: eliminarEntrada } = useDeleteOdontogramaEntrada();
+
+  // ── TIPO DE ODONTOGRAMA (INICIAL / EVOLUCION) — RF-06 ─────────────────────
+  const [tipoOdontograma, setTipoOdontograma] = useState(TIPO_EVOLUCION);
+
+  // SVG persistido en BD (enfoque híbrido). Consultamos todos para saber si
+  // ya existe un INICIAL (que es único por historia).
+  const { data: svgsGuardados = [] } = useOdontogramaSvg(patientId);
+  const { mutate: guardarSvgBD } = useAddOdontogramaSvg();
+  const svgInicial = svgsGuardados.find((s) => s.tipo === TIPO_INICIAL) || null;
+  const yaExisteInicial = Boolean(svgInicial);
 
   const [formEntrada, setFormEntrada] = useState(FORM_INICIAL);
   const [mostrarFormEntrada, setMostrarFormEntrada] = useState(false);
@@ -177,10 +196,41 @@ export default function Odontograma() {
     }
 
     localStorage.setItem(STORAGE_KEY, JSON.stringify(versions));
-    toast.success(
-      `Versión guardada con éxito el ${data.timestamp} para el paciente con ID: ${patientId}.`
+
+    // ── Persistencia en BD (enfoque híbrido RF-06) ─────────────────────────
+    // El localStorage queda como respaldo offline; la BD es la fuente oficial.
+    // Regla RF-06: el odontograma INICIAL es único por historia.
+    if (tipoOdontograma === TIPO_INICIAL && yaExisteInicial) {
+      toast.error(
+        'Ya existe un odontograma INICIAL para esta historia. Use el tipo EVOLUCIÓN para registrar cambios.'
+      );
+      return;
+    }
+
+    guardarSvgBD(
+      {
+        idHistory: patientId,
+        data: {
+          tipo: tipoOdontograma,
+          svg: svgContent,
+          especificaciones: currentEspec,
+          observaciones: currentObs,
+          fecha: currentDate || undefined,
+        },
+      },
+      {
+        onSuccess: () =>
+          toast.success(
+            `Odontograma ${tipoOdontograma} guardado en la historia clínica (paciente ${patientId}).`
+          ),
+        onError: (e) =>
+          toast.error(
+            e.message ||
+              'El dibujo se guardó localmente, pero falló el guardado en BD.'
+          ),
+      }
     );
-  }, [patientId, STORAGE_KEY]); // <--- patientId como dependencia
+  }, [patientId, STORAGE_KEY, tipoOdontograma, yaExisteInicial, guardarSvgBD]);
 
   // Función para CARGAR el historial de versiones
   const loadHistory = useCallback(() => {
@@ -342,7 +392,10 @@ export default function Odontograma() {
     if (!formEntrada.numeroDiente)
       return toast.error('Número de diente requerido');
     agregarEntrada(
-      { idHistory: patientId, data: formEntrada },
+      {
+        idHistory: patientId,
+        data: { ...formEntrada, tipo: tipoOdontograma },
+      },
       {
         onSuccess: () => {
           toast.success('Intervención registrada en la historia clínica');
@@ -356,6 +409,77 @@ export default function Odontograma() {
 
   return (
     <>
+      {/* ── SELECTOR DE TIPO DE ODONTOGRAMA (RF-06) ─────────────────────── */}
+      <div
+        style={{
+          display: 'flex',
+          alignItems: 'center',
+          gap: 16,
+          flexWrap: 'wrap',
+          background: 'white',
+          padding: '12px 16px',
+          borderRadius: 8,
+          margin: '0 0 8px',
+          boxShadow: '0 1px 4px rgba(0,0,0,0.06)',
+        }}
+      >
+        <span style={{ fontSize: 13, fontWeight: 700, color: '#374151' }}>
+          Tipo de odontograma:
+        </span>
+        <div style={{ display: 'flex', gap: 8 }}>
+          {[TIPO_INICIAL, TIPO_EVOLUCION].map((t) => {
+            const activo = tipoOdontograma === t;
+            const deshabilitado = t === TIPO_INICIAL && yaExisteInicial;
+            return (
+              <button
+                key={t}
+                onClick={() => setTipoOdontograma(t)}
+                disabled={deshabilitado && !activo}
+                title={
+                  deshabilitado
+                    ? 'Ya existe un odontograma INICIAL para esta historia'
+                    : t === TIPO_INICIAL
+                      ? 'Estado en que llegó el paciente (único por historia)'
+                      : 'Cambios y tratamientos por sesión'
+                }
+                style={{
+                  padding: '6px 16px',
+                  borderRadius: 6,
+                  border: activo
+                    ? '2px solid var(--color-primary)'
+                    : '2px solid #e5e7eb',
+                  background: activo ? 'var(--color-primary)' : 'white',
+                  color: activo ? 'white' : '#374151',
+                  fontWeight: 600,
+                  fontSize: 13,
+                  cursor: deshabilitado && !activo ? 'not-allowed' : 'pointer',
+                  opacity: deshabilitado && !activo ? 0.5 : 1,
+                }}
+              >
+                {t === TIPO_INICIAL ? 'Inicial' : 'Evolución'}
+              </button>
+            );
+          })}
+        </div>
+        {yaExisteInicial && (
+          <span style={{ fontSize: 12, color: '#6b7280' }}>
+            Inicial registrado el{' '}
+            {formatFecha(svgInicial?.fecha || svgInicial?.created_at)}
+          </span>
+        )}
+        <span
+          style={{
+            fontSize: 11,
+            color: '#9ca3af',
+            marginLeft: 'auto',
+            maxWidth: 360,
+          }}
+        >
+          El tipo seleccionado se aplica al guardar el dibujo y al registrar
+          intervenciones (azul = buen estado, rojo = mal estado — NTS N° 150).
+        </span>
+      </div>
+
       <div
         className="flex gap-4 p-4"
         style={{ minHeight: '80vh', background: '#f8fafc' }}
@@ -2361,6 +2485,7 @@ export default function Odontograma() {
                     'Diagnóstico',
                     'Tratamiento',
                     'Alumno',
+                    'Tipo',
                     'Fecha',
                     '',
                   ].map((h) => (
@@ -2420,6 +2545,28 @@ export default function Odontograma() {
                     </td>
                     <td style={{ padding: '8px 12px', color: '#374151' }}>
                       {entrada.alumno || '—'}
+                    </td>
+                    <td style={{ padding: '8px 12px' }}>
+                      <span
+                        style={{
+                          fontSize: 11,
+                          fontWeight: 700,
+                          padding: '2px 8px',
+                          borderRadius: 999,
+                          background:
+                            entrada.tipo === TIPO_INICIAL
+                              ? '#dbeafe'
+                              : '#dcfce7',
+                          color:
+                            entrada.tipo === TIPO_INICIAL
+                              ? '#1d4ed8'
+                              : '#15803d',
+                        }}
+                      >
+                        {entrada.tipo === TIPO_INICIAL
+                          ? 'Inicial'
+                          : 'Evolución'}
+                      </span>
                     </td>
                     <td
                       style={{

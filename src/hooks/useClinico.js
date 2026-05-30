@@ -10,6 +10,8 @@ import {
   fetchOdontograma,
   addOdontogramaEntrada,
   deleteOdontogramaEntrada,
+  fetchOdontogramaSvg,
+  addOdontogramaSvg,
   fetchPrescripciones,
   addPrescripcion,
   deletePrescripcion,
@@ -92,6 +94,23 @@ export const useDeleteOdontogramaEntrada = () => {
     mutationFn: deleteOdontogramaEntrada,
     onSuccess: (_, v) =>
       qc.invalidateQueries({ queryKey: ['odontograma', v.idHistory] }),
+  });
+};
+
+// SVG serializado (enfoque híbrido RF-06)
+export const useOdontogramaSvg = (id, tipo) =>
+  useQuery({
+    queryKey: ['odontograma-svg', id, tipo ?? 'ALL'],
+    queryFn: () => fetchOdontogramaSvg({ idHistory: id, tipo }),
+    enabled: !!id,
+    refetchOnWindowFocus: false,
+  });
+export const useAddOdontogramaSvg = () => {
+  const qc = useQueryClient();
+  return useMutation({
+    mutationFn: addOdontogramaSvg,
+    onSuccess: (_, v) =>
+      qc.invalidateQueries({ queryKey: ['odontograma-svg', v.idHistory] }),
   });
 };
 

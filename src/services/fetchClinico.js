@@ -31,6 +31,23 @@ export const deleteOdontogramaEntrada = ({ idHistory, idEntrada }) =>
     ...opts,
   }).then(handleResponse);
 
+// SVG serializado (enfoque híbrido RF-06). `tipo` = INICIAL | EVOLUCION
+export const fetchOdontogramaSvg = ({ idHistory, tipo } = {}) => {
+  const p = new URLSearchParams();
+  if (tipo) p.set('tipo', tipo);
+  return fetch(`${API}/hc/${idHistory}/odontograma/svg?${p}`, opts).then(
+    handleResponse
+  );
+};
+
+export const addOdontogramaSvg = ({ idHistory, data }) =>
+  fetch(`${API}/hc/${idHistory}/odontograma/svg`, {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify(data),
+    ...opts,
+  }).then(handleResponse);
+
 // ── PRESCRIPCIONES ───────────────────────────────────────────────────────────
 export const fetchPrescripciones = (id) =>
   fetch(`${API}/hc/${id}/prescripciones`, opts).then(handleResponse);
