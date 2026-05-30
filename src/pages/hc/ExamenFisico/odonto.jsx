@@ -16,6 +16,7 @@ import { useParams } from 'react-router';
 import toast from 'react-hot-toast';
 import OdontogramaToolsPanel from './odotools';
 import { HALLAZGOS_ODONTO, HALLAZGO_LABEL } from './hallazgosOdonto';
+import { calcularIndices } from './indicesOdonto';
 import {
   useOdontograma,
   useAddOdontogramaEntrada,
@@ -89,6 +90,9 @@ export default function Odontograma() {
   const { mutate: guardarSvgBD } = useAddOdontogramaSvg();
   const svgInicial = svgsGuardados.find((s) => s.tipo === TIPO_INICIAL) || null;
   const yaExisteInicial = Boolean(svgInicial);
+
+  // Índices CPO-D / CEO-D derivados de las entradas estructuradas (Bloque 3).
+  const indices = calcularIndices(entradas);
 
   const [formEntrada, setFormEntrada] = useState(FORM_INICIAL);
   const [mostrarFormEntrada, setMostrarFormEntrada] = useState(false);
@@ -2091,6 +2095,180 @@ export default function Odontograma() {
           onSaveVersion={saveOdontogramaVersion}
           onLoadVersion={loadHistory}
         />
+      </div>
+
+      {/* ── ÍNDICES CPO-D / CEO-D (Bloque 3 — RF-12) ───────────────────────
+        Calculados automáticamente desde las entradas estructuradas (hallazgos).
+      ─────────────────────────────────────────────────────────────────── */}
+      <div
+        style={{
+          background: 'white',
+          borderRadius: 8,
+          padding: 20,
+          marginTop: 16,
+          boxShadow: '0 1px 4px rgba(0,0,0,0.08)',
+        }}
+      >
+        <h3
+          style={{
+            margin: '0 0 4px',
+            fontSize: 16,
+            fontWeight: 700,
+            color: 'var(--color-primary)',
+          }}
+        >
+          Índices de experiencia de caries
+        </h3>
+        <p style={{ margin: '0 0 14px', fontSize: 12, color: '#6b7280' }}>
+          CPO-D (permanentes) y CEO-D (deciduos) — derivados de los hallazgos
+          registrados. Cada diente se cuenta una sola vez.
+        </p>
+
+        {indices.sinDatos ? (
+          <p style={{ fontSize: 13, color: '#9ca3af' }}>
+            Aún no hay hallazgos clasificables (Cariado, Perdido/Extraído u
+            Obturado) para calcular los índices. Registra intervenciones con un
+            hallazgo del catálogo NTS N° 150.
+          </p>
+        ) : (
+          <div style={{ display: 'flex', gap: 16, flexWrap: 'wrap' }}>
+            {/* CPO-D */}
+            <div
+              style={{
+                flex: '1 1 280px',
+                border: '1px solid #e5e7eb',
+                borderRadius: 8,
+                padding: 14,
+              }}
+            >
+              <div
+                style={{
+                  fontSize: 13,
+                  fontWeight: 700,
+                  color: '#374151',
+                  marginBottom: 8,
+                }}
+              >
+                CPO-D (dentición permanente)
+              </div>
+              <div style={{ display: 'flex', gap: 10, flexWrap: 'wrap' }}>
+                {[
+                  ['C', indices.cpod.c, 'Cariados'],
+                  ['P', indices.cpod.p, 'Perdidos'],
+                  ['O', indices.cpod.o, 'Obturados'],
+                ].map(([k, v, label]) => (
+                  <div
+                    key={k}
+                    title={label}
+                    style={{
+                      flex: 1,
+                      minWidth: 60,
+                      textAlign: 'center',
+                      background: '#f9fafb',
+                      borderRadius: 6,
+                      padding: '8px 4px',
+                    }}
+                  >
+                    <div
+                      style={{
+                        fontSize: 11,
+                        color: '#6b7280',
+                        fontWeight: 600,
+                      }}
+                    >
+                      {k}
+                    </div>
+                    <div style={{ fontSize: 20, fontWeight: 700 }}>{v}</div>
+                  </div>
+                ))}
+                <div
+                  style={{
+                    flex: 1,
+                    minWidth: 60,
+                    textAlign: 'center',
+                    background: 'var(--color-primary)',
+                    color: 'white',
+                    borderRadius: 6,
+                    padding: '8px 4px',
+                  }}
+                >
+                  <div style={{ fontSize: 11, fontWeight: 600 }}>CPO-D</div>
+                  <div style={{ fontSize: 20, fontWeight: 700 }}>
+                    {indices.cpod.total}
+                  </div>
+                </div>
+              </div>
+            </div>
+
+            {/* CEO-D */}
+            <div
+              style={{
+                flex: '1 1 280px',
+                border: '1px solid #e5e7eb',
+                borderRadius: 8,
+                padding: 14,
+              }}
+            >
+              <div
+                style={{
+                  fontSize: 13,
+                  fontWeight: 700,
+                  color: '#374151',
+                  marginBottom: 8,
+                }}
+              >
+                CEO-D (dentición decidua)
+              </div>
+              <div style={{ display: 'flex', gap: 10, flexWrap: 'wrap' }}>
+                {[
+                  ['c', indices.ceod.c, 'Cariados'],
+                  ['e', indices.ceod.e, 'Extraídos'],
+                  ['o', indices.ceod.o, 'Obturados'],
+                ].map(([k, v, label]) => (
+                  <div
+                    key={k}
+                    title={label}
+                    style={{
+                      flex: 1,
+                      minWidth: 60,
+                      textAlign: 'center',
+                      background: '#f9fafb',
+                      borderRadius: 6,
+                      padding: '8px 4px',
+                    }}
+                  >
+                    <div
+                      style={{
+                        fontSize: 11,
+                        color: '#6b7280',
+                        fontWeight: 600,
+                      }}
+                    >
+                      {k}
+                    </div>
+                    <div style={{ fontSize: 20, fontWeight: 700 }}>{v}</div>
+                  </div>
+                ))}
+                <div
+                  style={{
+                    flex: 1,
+                    minWidth: 60,
+                    textAlign: 'center',
+                    background: 'var(--color-primary)',
+                    color: 'white',
+                    borderRadius: 6,
+                    padding: '8px 4px',
+                  }}
+                >
+                  <div style={{ fontSize: 11, fontWeight: 600 }}>CEO-D</div>
+                  <div style={{ fontSize: 20, fontWeight: 700 }}>
+                    {indices.ceod.total}
+                  </div>
+                </div>
+              </div>
+            </div>
+          </div>
+        )}
       </div>
 
       {/* ── REGISTRO DE INTERVENCIONES EN BD (RF-06) ────────────────────────
