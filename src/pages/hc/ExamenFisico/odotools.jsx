@@ -12,6 +12,8 @@ import odontogramaTools from '../../../hooks/odotools';
 export default function OdontogramaToolsPanel({
   onSaveVersion,
   onLoadVersion,
+  selectedTooth = null,
+  onClearTooth,
 }) {
   const crownTypes = ['CM', 'CF', 'CMC', 'CV', 'CLM'];
   const colors = ['blue', 'red'];
@@ -50,7 +52,10 @@ export default function OdontogramaToolsPanel({
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
 
+  // Si hay un diente seleccionado por click en el SVG, se usa directamente
+  // (sin prompt). Si no, se recurre al window.prompt como respaldo.
   const askTooth = (message = 'Ingresa el diente (ej: 1.6)') => {
+    if (selectedTooth) return selectedTooth;
     const t = window.prompt(message);
     return t ? t.trim() : null;
   };
@@ -956,7 +961,50 @@ export default function OdontogramaToolsPanel({
         overflowY: 'auto',
       }}
     >
-      <h3 className="text-xl font-bold mb-4">Tratamientos</h3>
+      <h3 className="text-xl font-bold mb-2">Tratamientos</h3>
+
+      {/* Banner del diente seleccionado por click (Track B) */}
+      <div
+        style={{
+          display: 'flex',
+          alignItems: 'center',
+          gap: 8,
+          padding: '8px 10px',
+          marginBottom: 12,
+          borderRadius: 8,
+          fontSize: 13,
+          background: selectedTooth ? '#dbeafe' : '#f3f4f6',
+          border: `1px solid ${selectedTooth ? '#93c5fd' : '#e5e7eb'}`,
+        }}
+      >
+        {selectedTooth ? (
+          <>
+            <span style={{ color: '#1e3a8a' }}>
+              Diente seleccionado:{' '}
+              <strong style={{ fontSize: 15 }}>{selectedTooth}</strong>
+            </span>
+            <button
+              onClick={() => onClearTooth && onClearTooth()}
+              style={{
+                marginLeft: 'auto',
+                fontSize: 12,
+                color: '#1d4ed8',
+                background: 'none',
+                border: 'none',
+                cursor: 'pointer',
+                textDecoration: 'underline',
+              }}
+            >
+              Quitar
+            </button>
+          </>
+        ) : (
+          <span style={{ color: '#6b7280' }}>
+            👆 Haz click en un diente del odontograma para seleccionarlo, luego
+            elige un tratamiento.
+          </span>
+        )}
+      </div>
 
       <div className="grid grid-cols-1 md:grid-cols-2 gap-2">
         <button

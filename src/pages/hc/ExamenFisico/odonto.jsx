@@ -101,6 +101,30 @@ export default function Odontograma() {
   // Índices CPO-D / CEO-D derivados de las entradas estructuradas (Bloque 3).
   const indices = calcularIndices(entradas);
 
+  // ── SELECCIÓN DE DIENTE POR CLICK (Track B) ───────────────────────────────
+  // Permite elegir el diente haciendo click en el SVG en lugar de teclearlo en
+  // un window.prompt (apto para tablet, alineado con NTS-188 y software comercial).
+  const [selectedTooth, setSelectedTooth] = useState(null);
+
+  const handleToothClick = useCallback((e) => {
+    const grupo = e.target.closest && e.target.closest('.tooth-group');
+    if (!grupo) return;
+    const nombre = grupo.getAttribute('data-name');
+    if (nombre) setSelectedTooth(nombre.trim());
+  }, []);
+
+  // Resalta el diente seleccionado marcando su etiqueta (FDI) en el SVG.
+  useEffect(() => {
+    const svg = document.querySelector('svg.odo');
+    if (!svg) return;
+    svg.querySelectorAll('text.tooth-name').forEach((t) => {
+      const activo = t.textContent.trim() === selectedTooth;
+      t.style.fill = activo ? '#2563eb' : '';
+      t.style.fontWeight = activo ? '700' : '';
+      t.style.fontSize = activo ? '13px' : '';
+    });
+  }, [selectedTooth, entradas, showHistory]);
+
   const [formEntrada, setFormEntrada] = useState(FORM_INICIAL);
   const [mostrarFormEntrada, setMostrarFormEntrada] = useState(false);
 
@@ -500,7 +524,12 @@ export default function Odontograma() {
         className="flex gap-4 p-4"
         style={{ minHeight: '80vh', background: '#f8fafc' }}
       >
+        {/* Contenedor que delega los clicks de los dientes del SVG. La vía
+            accesible alternativa (teclado) es el ingreso manual del diente por
+            prompt, que sigue disponible como respaldo. */}
+        {/* eslint-disable-next-line jsx-a11y/no-static-element-interactions, jsx-a11y/click-events-have-key-events */}
         <div
+          onClick={handleToothClick}
           style={{
             flex: 1,
             overflow: 'auto',
@@ -520,6 +549,8 @@ export default function Odontograma() {
           .posnumber { font-size: 10px; fill: #333; }
           .tooth-name { font-size: 10px; fill: #111; pointer-events: none; }
           .part { cursor: pointer; stroke: black; fill: none; }
+          .tooth-group { cursor: pointer; }
+          .tooth-group:hover .part { stroke: #2563eb; }
           .tooth-group:hover .highlight rect,
           .tooth-group:hover .highlight polygon,
           .tooth-group:hover .highlight path { stroke: #e33; stroke-width: 2.5; }
@@ -2104,6 +2135,8 @@ export default function Odontograma() {
         <OdontogramaToolsPanel
           onSaveVersion={saveOdontogramaVersion}
           onLoadVersion={loadHistory}
+          selectedTooth={selectedTooth}
+          onClearTooth={() => setSelectedTooth(null)}
         />
       </div>
 
