@@ -16,6 +16,7 @@ import { useParams } from 'react-router';
 import toast from 'react-hot-toast';
 import OdontogramaToolsPanel from './odotools';
 import IhoSPanel from './IhoSPanel';
+import EpbPanel from './EpbPanel';
 import { HALLAZGOS_ODONTO, HALLAZGO_LABEL } from './hallazgosOdonto';
 import { calcularIndices } from './indicesOdonto';
 import {
@@ -2274,6 +2275,9 @@ export default function Odontograma() {
 
       {/* ── IHO-S (Bloque 4) ──────────────────────────────────────────────── */}
       <IhoSPanel patientId={patientId} />
+
+      {/* ── EPB / PSR (Bloque 5) ──────────────────────────────────────────── */}
+      <EpbPanel patientId={patientId} />
 
       {/* ── REGISTRO DE INTERVENCIONES EN BD (RF-06) ────────────────────────
         Sección integrada desde OdontogramaPage.jsx.

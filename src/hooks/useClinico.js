@@ -14,6 +14,8 @@ import {
   addOdontogramaSvg,
   fetchIhoS,
   saveIhoS,
+  fetchEpb,
+  saveEpb,
   fetchPrescripciones,
   addPrescripcion,
   deletePrescripcion,
@@ -130,6 +132,23 @@ export const useSaveIhoS = () => {
     mutationFn: saveIhoS,
     onSuccess: (_, v) =>
       qc.invalidateQueries({ queryKey: ['iho-s', v.idHistory] }),
+  });
+};
+
+// ── EPB (Examen Periodontal Básico / PSR) ─────────────────────────────────────
+export const useEpb = (id) =>
+  useQuery({
+    queryKey: ['epb', id],
+    queryFn: () => fetchEpb(id),
+    enabled: !!id,
+    refetchOnWindowFocus: false,
+  });
+export const useSaveEpb = () => {
+  const qc = useQueryClient();
+  return useMutation({
+    mutationFn: saveEpb,
+    onSuccess: (_, v) =>
+      qc.invalidateQueries({ queryKey: ['epb', v.idHistory] }),
   });
 };
 

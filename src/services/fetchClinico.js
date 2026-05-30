@@ -60,6 +60,18 @@ export const saveIhoS = ({ idHistory, data }) =>
     ...opts,
   }).then(handleResponse);
 
+// ── EPB (Examen Periodontal Básico / PSR) ─────────────────────────────────────
+export const fetchEpb = (idHistory) =>
+  fetch(`${API}/hc/${idHistory}/epb`, opts).then(handleResponse);
+
+export const saveEpb = ({ idHistory, data }) =>
+  fetch(`${API}/hc/${idHistory}/epb`, {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify(data),
+    ...opts,
+  }).then(handleResponse);
+
 // ── PRESCRIPCIONES ───────────────────────────────────────────────────────────
 export const fetchPrescripciones = (id) =>
   fetch(`${API}/hc/${id}/prescripciones`, opts).then(handleResponse);
