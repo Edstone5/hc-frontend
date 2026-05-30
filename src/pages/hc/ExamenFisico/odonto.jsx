@@ -17,7 +17,12 @@ import toast from 'react-hot-toast';
 import OdontogramaToolsPanel from './odotools';
 import IhoSPanel from './IhoSPanel';
 import EpbPanel from './EpbPanel';
-import { HALLAZGOS_ODONTO, HALLAZGO_LABEL } from './hallazgosOdonto';
+import LeyendaOdonto from './LeyendaOdonto';
+import {
+  HALLAZGOS_ODONTO,
+  HALLAZGO_LABEL,
+  colorHallazgo,
+} from './hallazgosOdonto';
 import { calcularIndices } from './indicesOdonto';
 import {
   useOdontograma,
@@ -484,9 +489,12 @@ export default function Odontograma() {
           }}
         >
           El tipo seleccionado se aplica al guardar el dibujo y al registrar
-          intervenciones (azul = buen estado, rojo = mal estado — NTS N° 150).
+          intervenciones (azul = buen estado, rojo = mal estado — NTS N° 188).
         </span>
       </div>
+
+      {/* Leyenda normativa de hallazgos (NTS N° 188-2022) */}
+      <LeyendaOdonto />
 
       <div
         className="flex gap-4 p-4"
@@ -2493,6 +2501,29 @@ export default function Odontograma() {
                     </option>
                   ))}
                 </select>
+                {formEntrada.codigoHallazgo && (
+                  <div
+                    style={{
+                      display: 'flex',
+                      alignItems: 'center',
+                      gap: 6,
+                      marginTop: 4,
+                      fontSize: 11,
+                      color: '#6b7280',
+                    }}
+                  >
+                    <span
+                      style={{
+                        width: 12,
+                        height: 12,
+                        borderRadius: 3,
+                        background: colorHallazgo(formEntrada.codigoHallazgo),
+                        display: 'inline-block',
+                      }}
+                    />
+                    Color normativo (NTS N° 188)
+                  </div>
+                )}
               </div>
 
               {/* Fecha */}
@@ -2784,7 +2815,7 @@ export default function Odontograma() {
                           }
                           style={{
                             fontWeight: 700,
-                            color: 'var(--color-primary)',
+                            color: colorHallazgo(entrada.codigo_hallazgo),
                           }}
                         >
                           {entrada.codigo_hallazgo}

@@ -68,3 +68,23 @@ export const HALLAZGO_LABEL = HALLAZGOS_ODONTO.reduce((acc, h) => {
   acc[h.codigo] = h.descripcion;
   return acc;
 }, {});
+
+// Colores normativos (NTS N° 188-MINSA/DGIESP-2022, que actualiza la N° 150):
+//   azul = buen estado / característica no patológica
+//   rojo = mal estado / temporal / patológico
+// 'neutro' no tiene color obligatorio en la norma → gris (el usuario decide).
+export const COLOR_ESTADO = {
+  bueno: '#1d4ed8', // azul
+  malo: '#dc2626', // rojo
+  neutro: '#6b7280', // gris
+};
+
+const ESTADO_POR_CODIGO = HALLAZGOS_ODONTO.reduce((acc, h) => {
+  acc[h.codigo] = h.estado;
+  return acc;
+}, {});
+
+// Color normativo (azul/rojo/gris) que corresponde a un código de hallazgo.
+export function colorHallazgo(codigo) {
+  return COLOR_ESTADO[ESTADO_POR_CODIGO[codigo]] || COLOR_ESTADO.neutro;
+}
