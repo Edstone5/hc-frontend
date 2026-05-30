@@ -1,9 +1,41 @@
 // src/pages/hc/ExamenFisico/odonto.jsx
+//
+// RF-06: Contiene dos sub-módulos complementarios:
+//   1. Odontograma SVG interactivo (24 herramientas, guarda en localStorage)
+//   2. Registro de intervenciones en BD (tabla, formulario) — integrado desde
+//      OdontogramaPage.jsx (2026-05-30). El archivo original se conserva en
+//      src/pages/hc/Odontograma/OdontogramaPage.jsx para post-evaluación.
+//
+// Justificación de la integración:
+//   - El SVG registra el estado visual; la tabla registra intervenciones estructuradas.
+//   - Ambos son parte de RF-06: "odontograma inicial" (SVG) + "evolutivo" (tabla en BD).
+//   - Tenerlos en la misma vista evita que el estudiante navegue entre dos secciones.
 
 import React, { useEffect, useState, useCallback } from 'react';
 import { useParams } from 'react-router';
 import toast from 'react-hot-toast';
 import OdontogramaToolsPanel from './odotools';
+import {
+  useOdontograma,
+  useAddOdontogramaEntrada,
+  useDeleteOdontogramaEntrada,
+} from '@hooks/useClinico';
+
+// ── Constantes para el formulario de registro de BD ──────────────────────────
+const SUPERFICIES = ['vestibular', 'lingual', 'mesial', 'distal', 'oclusal'];
+const FORM_INICIAL = {
+  numeroDiente: '',
+  superficie: '',
+  diagnostico: '',
+  tratamiento: '',
+  fecha: new Date().toISOString().split('T')[0],
+  alumno: '',
+};
+
+function formatFecha(v) {
+  if (!v) return '—';
+  return new Date(v).toLocaleDateString('es-PE');
+}
 
 const CRITICAL_SVG_STYLES = `
   .letra {
@@ -23,11 +55,22 @@ const CRITICAL_SVG_STYLES = `
   .annotation { display: block; }
 `;
 export default function Odontograma() {
-  // 2. OBTENER EL ID DEL PACIENTE DESDE LA URL
+  // ── OBTENER EL ID DESDE LA URL ────────────────────────────────────────────
   const { id: patientId } = useParams();
 
-  // 3. CLAVE ÚNICA DE LOCALSTORAGE
+  // ── CLAVE ÚNICA DE LOCALSTORAGE (versiones SVG) ───────────────────────────
   const STORAGE_KEY = `odontogramaVersions_${patientId}`;
+
+  // ── ESTADO Y HOOKS PARA EL REGISTRO DE INTERVENCIONES (BD) ───────────────
+  // Integrado desde OdontogramaPage.jsx (RF-06, 2026-05-30)
+  const { data: entradas = [], isLoading: cargandoEntradas } =
+    useOdontograma(patientId);
+  const { mutate: agregarEntrada, isPending: agregando } =
+    useAddOdontogramaEntrada();
+  const { mutate: eliminarEntrada } = useDeleteOdontogramaEntrada();
+
+  const [formEntrada, setFormEntrada] = useState(FORM_INICIAL);
+  const [mostrarFormEntrada, setMostrarFormEntrada] = useState(false);
 
   const [showHistory, setShowHistory] = useState(false);
   const [selectedVersion, setSelectedVersion] = useState(null);
@@ -294,21 +337,39 @@ export default function Odontograma() {
     );
   }
 
+  // ── MANEJADOR PARA REGISTRAR ENTRADA EN BD ───────────────────────────────
+  const handleAgregarEntrada = () => {
+    if (!formEntrada.numeroDiente)
+      return toast.error('Número de diente requerido');
+    agregarEntrada(
+      { idHistory: patientId, data: formEntrada },
+      {
+        onSuccess: () => {
+          toast.success('Intervención registrada en la historia clínica');
+          setFormEntrada(FORM_INICIAL);
+          setMostrarFormEntrada(false);
+        },
+        onError: (e) => toast.error(e.message || 'Error al registrar'),
+      }
+    );
+  };
+
   return (
-    <div
-      className="flex gap-4 p-4"
-      style={{ minHeight: '80vh', background: '#f8fafc' }}
-    >
+    <>
       <div
-        style={{
-          flex: 1,
-          overflow: 'auto',
-          background: 'white',
-          padding: 12,
-          borderRadius: 8,
-        }}
+        className="flex gap-4 p-4"
+        style={{ minHeight: '80vh', background: '#f8fafc' }}
       >
-        <style>{`
+        <div
+          style={{
+            flex: 1,
+            overflow: 'auto',
+            background: 'white',
+            padding: 12,
+            borderRadius: 8,
+          }}
+        >
+          <style>{`
           .letra {
             border: 1px solid #000;
             padding: 4px;
@@ -325,180 +386,84 @@ export default function Odontograma() {
           input.letra { font-size:12px; }
         `}</style>
 
-        {/* SVG completo */}
-        <svg
-          className="odo"
-          width="1400"
-          height="1400"
-          viewBox="0 0 1400 1400"
-          xmlns="http://www.w3.org/2000/svg"
-          xmlnsXlink="http://www.w3.org/1999/xlink"
-          style={{
-            background: 'white',
-            fontFamily: 'Arial, sans-serif',
-            display: 'block',
-          }}
-        >
-          <foreignObject x="1170" y="20" width="270" height="40">
-            <div>
-              <label
-                htmlFor="fecha"
-                style={{ fontSize: '12px', marginRight: '10px' }}
-              >
-                Fecha:
-              </label>
-              <input
-                id="fecha"
-                type="date"
-                className="letra"
-                style={{ width: '100px' }}
-              />
-            </div>
-          </foreignObject>
-          {/* ======= DEFINICIÓN DE LOS 8 DISEÑOS (design1..design8) ======= */}
-          <defs>
-            {/* DESIGN 1 */}
-            <g id="design1">
-              <polygon
-                id="d1_part1"
-                className="part line"
-                points="50,100 80,100 80,70 50,30"
-                data-name="corona-izq"
-              />
-              <polygon
-                id="d1_part2"
-                className="part line"
-                points="80,70 100,30 120,70 120,100 80,100"
-                data-name="corona-centro"
-              />
-              <polygon
-                id="d1_part3"
-                className="part line"
-                points="150,100 120,100 120,70 150,30"
-                data-name="corona-der"
-              />
-              <polygon
-                id="d1_part4"
-                className="part line"
-                points="50,200 78,170 78,130 50,100"
-                data-name="raiz-izq"
-              />
-              <polygon
-                id="d1_part5"
-                className="part line"
-                points="150,200 120,170 120,130 150,100"
-                data-name="raiz-der"
-              />
-              <polygon
-                id="d1_part6"
-                className="part line"
-                points="150,200 120,170 80,170 50,200"
-                data-name="base"
-              />
-              <polygon
-                id="d1_part7"
-                className="part line"
-                points="50,100 80,130 120,130 150,100"
-                data-name="cingulo"
-              />
-              <rect
-                id="d1_part8"
-                className="part thin"
-                x="78"
-                y="130"
-                width="14"
-                height="20"
-                data-name="fosa1"
-              />
-              <rect
-                id="d1_part9"
-                className="part thin"
-                x="93"
-                y="130"
-                width="12"
-                height="20"
-                data-name="fosa2"
-              />
-              <rect
-                id="d1_part10"
-                className="part thin"
-                x="106"
-                y="130"
-                width="13"
-                height="20"
-                data-name="fosa3"
-              />
-              <rect
-                id="d1_part11"
-                className="part thin"
-                x="78"
-                y="150"
-                width="14"
-                height="20"
-                data-name="surco1"
-              />
-              <rect
-                id="d1_part12"
-                className="part thin"
-                x="93"
-                y="150"
-                width="12"
-                height="20"
-                data-name="surco2"
-              />
-              <rect
-                id="d1_part13"
-                className="part thin"
-                x="106"
-                y="150"
-                width="13"
-                height="20"
-                data-name="surco3"
-              />
-              <title>Design 1 (13 partes)</title>
-            </g>
-
-            {/* DESIGN 2 */}
-            <g id="design2">
-              <g transform="rotate(180,100,100)">
+          {/* SVG completo */}
+          <svg
+            className="odo"
+            width="1400"
+            height="1400"
+            viewBox="0 0 1400 1400"
+            xmlns="http://www.w3.org/2000/svg"
+            xmlnsXlink="http://www.w3.org/1999/xlink"
+            style={{
+              background: 'white',
+              fontFamily: 'Arial, sans-serif',
+              display: 'block',
+            }}
+          >
+            <foreignObject x="1170" y="20" width="270" height="40">
+              <div>
+                <label
+                  htmlFor="fecha"
+                  style={{ fontSize: '12px', marginRight: '10px' }}
+                >
+                  Fecha:
+                </label>
+                <input
+                  id="fecha"
+                  type="date"
+                  className="letra"
+                  style={{ width: '100px' }}
+                />
+              </div>
+            </foreignObject>
+            {/* ======= DEFINICIÓN DE LOS 8 DISEÑOS (design1..design8) ======= */}
+            <defs>
+              {/* DESIGN 1 */}
+              <g id="design1">
                 <polygon
-                  id="d2_part1"
+                  id="d1_part1"
                   className="part line"
-                  points="50,70 75,30 100,70 100,100 50,100"
+                  points="50,100 80,100 80,70 50,30"
                   data-name="corona-izq"
                 />
                 <polygon
-                  id="d2_part2"
+                  id="d1_part2"
                   className="part line"
-                  points="100,70 120,30 150,70 150,100 100,100"
+                  points="80,70 100,30 120,70 120,100 80,100"
+                  data-name="corona-centro"
+                />
+                <polygon
+                  id="d1_part3"
+                  className="part line"
+                  points="150,100 120,100 120,70 150,30"
                   data-name="corona-der"
                 />
                 <polygon
-                  id="d2_part3"
+                  id="d1_part4"
                   className="part line"
                   points="50,200 78,170 78,130 50,100"
                   data-name="raiz-izq"
                 />
                 <polygon
-                  id="d2_part4"
+                  id="d1_part5"
                   className="part line"
                   points="150,200 120,170 120,130 150,100"
                   data-name="raiz-der"
                 />
                 <polygon
-                  id="d2_part5"
+                  id="d1_part6"
                   className="part line"
                   points="150,200 120,170 80,170 50,200"
                   data-name="base"
                 />
                 <polygon
-                  id="d2_part6"
+                  id="d1_part7"
                   className="part line"
                   points="50,100 80,130 120,130 150,100"
                   data-name="cingulo"
                 />
                 <rect
-                  id="d2_part7"
+                  id="d1_part8"
                   className="part thin"
                   x="78"
                   y="130"
@@ -507,7 +472,7 @@ export default function Odontograma() {
                   data-name="fosa1"
                 />
                 <rect
-                  id="d2_part8"
+                  id="d1_part9"
                   className="part thin"
                   x="93"
                   y="130"
@@ -516,7 +481,7 @@ export default function Odontograma() {
                   data-name="fosa2"
                 />
                 <rect
-                  id="d2_part9"
+                  id="d1_part10"
                   className="part thin"
                   x="106"
                   y="130"
@@ -525,7 +490,7 @@ export default function Odontograma() {
                   data-name="fosa3"
                 />
                 <rect
-                  id="d2_part10"
+                  id="d1_part11"
                   className="part thin"
                   x="78"
                   y="150"
@@ -534,7 +499,7 @@ export default function Odontograma() {
                   data-name="surco1"
                 />
                 <rect
-                  id="d2_part11"
+                  id="d1_part12"
                   className="part thin"
                   x="93"
                   y="150"
@@ -543,7 +508,7 @@ export default function Odontograma() {
                   data-name="surco2"
                 />
                 <rect
-                  id="d2_part12"
+                  id="d1_part13"
                   className="part thin"
                   x="106"
                   y="150"
@@ -551,98 +516,140 @@ export default function Odontograma() {
                   height="20"
                   data-name="surco3"
                 />
-                <title>Design 2 (12 partes) - girado</title>
+                <title>Design 1 (13 partes)</title>
               </g>
-            </g>
 
-            {/* DESIGN 3 */}
-            <g id="design3">
-              <polygon
-                id="d3_part1"
-                className="part line"
-                points="100,30 70,100 130,100"
-                data-name="corona-tri"
-              />
-              <polygon
-                id="d3_part2"
-                className="part line"
-                points="50,200 78,170 78,130 50,100"
-                data-name="raiz-izq"
-              />
-              <polygon
-                id="d3_part3"
-                className="part line"
-                points="150,200 120,170 120,130 150,100"
-                data-name="raiz-der"
-              />
-              <polygon
-                id="d3_part4"
-                className="part line"
-                points="150,200 120,170 80,170 50,200"
-                data-name="base"
-              />
-              <polygon
-                id="d3_part5"
-                className="part line"
-                points="50,100 80,130 120,130 150,100"
-                data-name="cingulo"
-              />
-              <rect
-                id="d3_part6"
-                className="part thin"
-                x="78"
-                y="130"
-                width="42"
-                height="20"
-                data-name="fosas"
-              />
-              <rect
-                id="d3_part7"
-                className="part thin"
-                x="78"
-                y="150"
-                width="42"
-                height="20"
-                data-name="surcos"
-              />
-              <title>Design 3 (7 partes)</title>
-            </g>
+              {/* DESIGN 2 */}
+              <g id="design2">
+                <g transform="rotate(180,100,100)">
+                  <polygon
+                    id="d2_part1"
+                    className="part line"
+                    points="50,70 75,30 100,70 100,100 50,100"
+                    data-name="corona-izq"
+                  />
+                  <polygon
+                    id="d2_part2"
+                    className="part line"
+                    points="100,70 120,30 150,70 150,100 100,100"
+                    data-name="corona-der"
+                  />
+                  <polygon
+                    id="d2_part3"
+                    className="part line"
+                    points="50,200 78,170 78,130 50,100"
+                    data-name="raiz-izq"
+                  />
+                  <polygon
+                    id="d2_part4"
+                    className="part line"
+                    points="150,200 120,170 120,130 150,100"
+                    data-name="raiz-der"
+                  />
+                  <polygon
+                    id="d2_part5"
+                    className="part line"
+                    points="150,200 120,170 80,170 50,200"
+                    data-name="base"
+                  />
+                  <polygon
+                    id="d2_part6"
+                    className="part line"
+                    points="50,100 80,130 120,130 150,100"
+                    data-name="cingulo"
+                  />
+                  <rect
+                    id="d2_part7"
+                    className="part thin"
+                    x="78"
+                    y="130"
+                    width="14"
+                    height="20"
+                    data-name="fosa1"
+                  />
+                  <rect
+                    id="d2_part8"
+                    className="part thin"
+                    x="93"
+                    y="130"
+                    width="12"
+                    height="20"
+                    data-name="fosa2"
+                  />
+                  <rect
+                    id="d2_part9"
+                    className="part thin"
+                    x="106"
+                    y="130"
+                    width="13"
+                    height="20"
+                    data-name="fosa3"
+                  />
+                  <rect
+                    id="d2_part10"
+                    className="part thin"
+                    x="78"
+                    y="150"
+                    width="14"
+                    height="20"
+                    data-name="surco1"
+                  />
+                  <rect
+                    id="d2_part11"
+                    className="part thin"
+                    x="93"
+                    y="150"
+                    width="12"
+                    height="20"
+                    data-name="surco2"
+                  />
+                  <rect
+                    id="d2_part12"
+                    className="part thin"
+                    x="106"
+                    y="150"
+                    width="13"
+                    height="20"
+                    data-name="surco3"
+                  />
+                  <title>Design 2 (12 partes) - girado</title>
+                </g>
+              </g>
 
-            {/* DESIGN 4 */}
-            <g id="design4">
-              <g transform="rotate(180,100,120)">
+              {/* DESIGN 3 */}
+              <g id="design3">
                 <polygon
-                  id="d4_part1"
+                  id="d3_part1"
                   className="part line"
                   points="100,30 70,100 130,100"
                   data-name="corona-tri"
                 />
                 <polygon
-                  id="d4_part2"
+                  id="d3_part2"
                   className="part line"
                   points="50,200 78,170 78,130 50,100"
                   data-name="raiz-izq"
                 />
                 <polygon
-                  id="d4_part3"
+                  id="d3_part3"
                   className="part line"
                   points="150,200 120,170 120,130 150,100"
                   data-name="raiz-der"
                 />
                 <polygon
-                  id="d4_part4"
+                  id="d3_part4"
                   className="part line"
                   points="150,200 120,170 80,170 50,200"
                   data-name="base"
                 />
                 <polygon
-                  id="d4_part5"
+                  id="d3_part5"
                   className="part line"
                   points="50,100 80,130 120,130 150,100"
                   data-name="cingulo"
                 />
                 <rect
-                  id="d4_part6"
+                  id="d3_part6"
                   className="part thin"
                   x="78"
                   y="130"
@@ -651,7 +658,7 @@ export default function Odontograma() {
                   data-name="fosas"
                 />
                 <rect
-                  id="d4_part7"
+                  id="d3_part7"
                   className="part thin"
                   x="78"
                   y="150"
@@ -659,1137 +666,1804 @@ export default function Odontograma() {
                   height="20"
                   data-name="surcos"
                 />
-                <title>Design 4 (7 partes) - girado</title>
+                <title>Design 3 (7 partes)</title>
               </g>
-            </g>
 
-            {/* DESIGN 5 */}
-            <g id="design5">
-              <polygon
-                id="d5_part1"
-                className="part line"
-                points="80,30 60,100 100,100"
-                data-name="corona-l1"
-              />
-              <polygon
-                id="d5_part2"
-                className="part line"
-                points="120,30 100,100 140,100"
-                data-name="corona-l2"
-              />
-              <polygon
-                id="d5_part3"
-                className="part line"
-                points="50,200 78,170 78,130 50,100"
-                data-name="raiz-izq"
-              />
-              <polygon
-                id="d5_part4"
-                className="part line"
-                points="150,200 120,170 120,130 150,100"
-                data-name="raiz-der"
-              />
-              <polygon
-                id="d5_part5"
-                className="part line"
-                points="150,200 120,170 80,170 50,200"
-                data-name="base"
-              />
-              <polygon
-                id="d5_part6"
-                className="part line"
-                points="50,100 80,130 120,130 150,100"
-                data-name="cingulo"
-              />
-              <title>Design 5 (1.4)</title>
-            </g>
+              {/* DESIGN 4 */}
+              <g id="design4">
+                <g transform="rotate(180,100,120)">
+                  <polygon
+                    id="d4_part1"
+                    className="part line"
+                    points="100,30 70,100 130,100"
+                    data-name="corona-tri"
+                  />
+                  <polygon
+                    id="d4_part2"
+                    className="part line"
+                    points="50,200 78,170 78,130 50,100"
+                    data-name="raiz-izq"
+                  />
+                  <polygon
+                    id="d4_part3"
+                    className="part line"
+                    points="150,200 120,170 120,130 150,100"
+                    data-name="raiz-der"
+                  />
+                  <polygon
+                    id="d4_part4"
+                    className="part line"
+                    points="150,200 120,170 80,170 50,200"
+                    data-name="base"
+                  />
+                  <polygon
+                    id="d4_part5"
+                    className="part line"
+                    points="50,100 80,130 120,130 150,100"
+                    data-name="cingulo"
+                  />
+                  <rect
+                    id="d4_part6"
+                    className="part thin"
+                    x="78"
+                    y="130"
+                    width="42"
+                    height="20"
+                    data-name="fosas"
+                  />
+                  <rect
+                    id="d4_part7"
+                    className="part thin"
+                    x="78"
+                    y="150"
+                    width="42"
+                    height="20"
+                    data-name="surcos"
+                  />
+                  <title>Design 4 (7 partes) - girado</title>
+                </g>
+              </g>
 
-            {/* DESIGN 6 */}
-            <g id="design6">
-              <polygon
-                id="d6_part1"
-                className="part line"
-                points="80,30 60,100 100,100"
-                data-name="corona-l1"
-              />
-              <polygon
-                id="d6_part2"
-                className="part line"
-                points="120,30 100,100 140,100"
-                data-name="corona-l2"
-              />
-              <polygon
-                id="d6_part3"
-                className="part line"
-                points="50,200 78,170 78,130 50,100"
-                data-name="raiz-izq"
-              />
-              <polygon
-                id="d6_part4"
-                className="part line"
-                points="150,200 120,170 120,130 150,100"
-                data-name="raiz-der"
-              />
-              <polygon
-                id="d6_part5"
-                className="part line"
-                points="150,200 120,170 80,170 50,200"
-                data-name="base"
-              />
-              <polygon
-                id="d6_part6"
-                className="part line"
-                points="50,100 80,130 120,130 150,100"
-                data-name="cingulo"
-              />
-              <rect
-                id="d6_part7"
-                className="part thin"
-                x="78"
-                y="130"
-                width="42"
-                height="20"
-                data-name="fosas"
-              />
-              <rect
-                id="d6_part8"
-                className="part thin"
-                x="78"
-                y="150"
-                width="42"
-                height="20"
-                data-name="surcos"
-              />
-              <title>Design 6 (8 partes)</title>
-            </g>
-
-            {/* DESIGN 7 */}
-            <g id="design7">
-              <polygon
-                id="d7_part1"
-                className="part line"
-                points="100,30 50,100 150,100"
-                data-name="corona"
-              />
-              <polygon
-                id="d7_part2"
-                className="part line"
-                points="50,100 80,150 120,150 150,100"
-                data-name="paredes"
-              />
-              <polygon
-                id="d7_part3"
-                className="part line"
-                points="150,200 120,150 80,150 50,200"
-                data-name="base"
-              />
-              <polygon
-                id="d7_part4"
-                className="part line"
-                points="50,100 50,200 80,150"
-                data-name="lado-izq"
-              />
-              <polygon
-                id="d7_part5"
-                className="part line"
-                points="150,100 150,200 120,150"
-                data-name="lado-der"
-              />
-              <title>Design 7 (5 partes)</title>
-            </g>
-
-            {/* DESIGN 8 */}
-            <g id="design8">
-              <g transform="rotate(180,100,120)">
+              {/* DESIGN 5 */}
+              <g id="design5">
                 <polygon
-                  id="d8_part1"
+                  id="d5_part1"
+                  className="part line"
+                  points="80,30 60,100 100,100"
+                  data-name="corona-l1"
+                />
+                <polygon
+                  id="d5_part2"
+                  className="part line"
+                  points="120,30 100,100 140,100"
+                  data-name="corona-l2"
+                />
+                <polygon
+                  id="d5_part3"
+                  className="part line"
+                  points="50,200 78,170 78,130 50,100"
+                  data-name="raiz-izq"
+                />
+                <polygon
+                  id="d5_part4"
+                  className="part line"
+                  points="150,200 120,170 120,130 150,100"
+                  data-name="raiz-der"
+                />
+                <polygon
+                  id="d5_part5"
+                  className="part line"
+                  points="150,200 120,170 80,170 50,200"
+                  data-name="base"
+                />
+                <polygon
+                  id="d5_part6"
+                  className="part line"
+                  points="50,100 80,130 120,130 150,100"
+                  data-name="cingulo"
+                />
+                <title>Design 5 (1.4)</title>
+              </g>
+
+              {/* DESIGN 6 */}
+              <g id="design6">
+                <polygon
+                  id="d6_part1"
+                  className="part line"
+                  points="80,30 60,100 100,100"
+                  data-name="corona-l1"
+                />
+                <polygon
+                  id="d6_part2"
+                  className="part line"
+                  points="120,30 100,100 140,100"
+                  data-name="corona-l2"
+                />
+                <polygon
+                  id="d6_part3"
+                  className="part line"
+                  points="50,200 78,170 78,130 50,100"
+                  data-name="raiz-izq"
+                />
+                <polygon
+                  id="d6_part4"
+                  className="part line"
+                  points="150,200 120,170 120,130 150,100"
+                  data-name="raiz-der"
+                />
+                <polygon
+                  id="d6_part5"
+                  className="part line"
+                  points="150,200 120,170 80,170 50,200"
+                  data-name="base"
+                />
+                <polygon
+                  id="d6_part6"
+                  className="part line"
+                  points="50,100 80,130 120,130 150,100"
+                  data-name="cingulo"
+                />
+                <rect
+                  id="d6_part7"
+                  className="part thin"
+                  x="78"
+                  y="130"
+                  width="42"
+                  height="20"
+                  data-name="fosas"
+                />
+                <rect
+                  id="d6_part8"
+                  className="part thin"
+                  x="78"
+                  y="150"
+                  width="42"
+                  height="20"
+                  data-name="surcos"
+                />
+                <title>Design 6 (8 partes)</title>
+              </g>
+
+              {/* DESIGN 7 */}
+              <g id="design7">
+                <polygon
+                  id="d7_part1"
                   className="part line"
                   points="100,30 50,100 150,100"
                   data-name="corona"
                 />
                 <polygon
-                  id="d8_part2"
+                  id="d7_part2"
                   className="part line"
                   points="50,100 80,150 120,150 150,100"
                   data-name="paredes"
                 />
                 <polygon
-                  id="d8_part3"
+                  id="d7_part3"
                   className="part line"
                   points="150,200 120,150 80,150 50,200"
                   data-name="base"
                 />
                 <polygon
-                  id="d8_part4"
+                  id="d7_part4"
                   className="part line"
                   points="50,100 50,200 80,150"
                   data-name="lado-izq"
                 />
                 <polygon
-                  id="d8_part5"
+                  id="d7_part5"
                   className="part line"
                   points="150,100 150,200 120,150"
                   data-name="lado-der"
                 />
-                <title>Design 8 (5 partes) - girado</title>
+                <title>Design 7 (5 partes)</title>
               </g>
-            </g>
-          </defs>
 
-          <foreignObject x="570" y="20" width="600" height="30">
-            <div xmlns="http://www.w3.org/1999/xhtml">
-              <label
-                htmlFor="odontograma-title"
-                style={{
-                  fontSize: '25px',
-                  marginRight: '10px',
-                  WebkitTextStrokeWidth: '2px',
-                }}
+              {/* DESIGN 8 */}
+              <g id="design8">
+                <g transform="rotate(180,100,120)">
+                  <polygon
+                    id="d8_part1"
+                    className="part line"
+                    points="100,30 50,100 150,100"
+                    data-name="corona"
+                  />
+                  <polygon
+                    id="d8_part2"
+                    className="part line"
+                    points="50,100 80,150 120,150 150,100"
+                    data-name="paredes"
+                  />
+                  <polygon
+                    id="d8_part3"
+                    className="part line"
+                    points="150,200 120,150 80,150 50,200"
+                    data-name="base"
+                  />
+                  <polygon
+                    id="d8_part4"
+                    className="part line"
+                    points="50,100 50,200 80,150"
+                    data-name="lado-izq"
+                  />
+                  <polygon
+                    id="d8_part5"
+                    className="part line"
+                    points="150,100 150,200 120,150"
+                    data-name="lado-der"
+                  />
+                  <title>Design 8 (5 partes) - girado</title>
+                </g>
+              </g>
+            </defs>
+
+            <foreignObject x="570" y="20" width="600" height="30">
+              <div xmlns="http://www.w3.org/1999/xhtml">
+                <label
+                  htmlFor="odontograma-title"
+                  style={{
+                    fontSize: '25px',
+                    marginRight: '10px',
+                    WebkitTextStrokeWidth: '2px',
+                  }}
+                >
+                  Odontograma
+                </label>
+                <span id="odontograma-title" style={{ display: 'none' }}></span>
+              </div>
+            </foreignObject>
+
+            {/* FILAS (1..52) */}
+            {/* ----------------- FILA 1 (1..16) ----------------- */}
+
+            <g id="fila1" transform="translate(20,110)">
+              <g
+                id="tooth_1_8"
+                className="tooth-group"
+                data-name="1.8"
+                transform="translate(0,0) scale(0.6)"
               >
-                Odontograma
-              </label>
-              <span id="odontograma-title" style={{ display: 'none' }}></span>
-            </div>
-          </foreignObject>
+                <use xlinkHref="#design1" />
+              </g>
+              <text x="55" y="-2" className="tooth-name">
+                1.8
+              </text>
+              <foreignObject x="25" y="-45" width="68" height="30" id="input1">
+                <div xmlns="http://www.w3.org/1999/xhtml">
+                  <input type="text" className="letra" />
+                </div>
+              </foreignObject>
 
-          {/* FILAS (1..52) */}
-          {/* ----------------- FILA 1 (1..16) ----------------- */}
-
-          <g id="fila1" transform="translate(20,110)">
-            <g
-              id="tooth_1_8"
-              className="tooth-group"
-              data-name="1.8"
-              transform="translate(0,0) scale(0.6)"
-            >
-              <use xlinkHref="#design1" />
-            </g>
-            <text x="55" y="-2" className="tooth-name">
-              1.8
-            </text>
-            <foreignObject x="25" y="-45" width="68" height="30" id="input1">
-              <div xmlns="http://www.w3.org/1999/xhtml">
-                <input type="text" className="letra" />
-              </div>
-            </foreignObject>
-
-            <g
-              id="tooth_1_7"
-              className="tooth-group"
-              data-name="1.7"
-              transform="translate(80,0) scale(0.6)"
-            >
-              <use xlinkHref="#design1" />
-            </g>
-            <text x="135" y="-2" className="tooth-name">
-              1.7
-            </text>
-            <foreignObject x="105" y="-45" width="68" height="30" id="input2">
-              <div xmlns="http://www.w3.org/1999/xhtml">
-                <input type="text" className="letra" />
-              </div>
-            </foreignObject>
-
-            <g
-              id="tooth_1_6"
-              className="tooth-group"
-              data-name="1.6"
-              transform="translate(160,0) scale(0.6)"
-            >
-              <use xlinkHref="#design1" />
-            </g>
-            <text x="215" y="-2" className="tooth-name">
-              1.6
-            </text>
-            <foreignObject x="185" y="-45" width="68" height="30" id="input3">
-              <div xmlns="http://www.w3.org/1999/xhtml">
-                <input type="text" className="letra" />
-              </div>
-            </foreignObject>
-
-            <g
-              id="tooth_1_5"
-              className="tooth-group"
-              data-name="1.5"
-              transform="translate(240,0) scale(0.6)"
-            >
-              <use xlinkHref="#design3" />
-            </g>
-            <text x="295" y="-2" className="tooth-name">
-              1.5
-            </text>
-            <foreignObject x="265" y="-45" width="68" height="30" id="input4">
-              <div xmlns="http://www.w3.org/1999/xhtml">
-                <input type="text" className="letra" />
-              </div>
-            </foreignObject>
-
-            <g
-              id="tooth_1_4"
-              className="tooth-group"
-              data-name="1.4"
-              transform="translate(320,0) scale(0.6)"
-            >
-              <use xlinkHref="#design5" />
-            </g>
-            <text x="375" y="-2" className="tooth-name">
-              1.4
-            </text>
-            <foreignObject x="345" y="-45" width="68" height="30" id="input5">
-              <div xmlns="http://www.w3.org/1999/xhtml">
-                <input type="text" className="letra" />
-              </div>
-            </foreignObject>
-
-            <g
-              id="tooth_1_3"
-              className="tooth-group"
-              data-name="1.3"
-              transform="translate(400,0) scale(0.6)"
-            >
-              <use xlinkHref="#design7" />
-            </g>
-            <text x="455" y="-2" className="tooth-name">
-              1.3
-            </text>
-            <foreignObject x="430" y="-45" width="60" height="30" id="input6">
-              <div xmlns="http://www.w3.org/1999/xhtml">
-                <input type="text" className="letra" />
-              </div>
-            </foreignObject>
-
-            <g
-              id="tooth_1_2"
-              className="tooth-group"
-              data-name="1.2"
-              transform="translate(480,0) scale(0.6)"
-            >
-              <use xlinkHref="#design7" />
-            </g>
-            <text x="530" y="-2" className="tooth-name">
-              1.2
-            </text>
-            <foreignObject x="506" y="-45" width="60" height="30" id="input7">
-              <div xmlns="http://www.w3.org/1999/xhtml">
-                <input type="text" className="letra" />
-              </div>
-            </foreignObject>
-
-            <g
-              id="tooth_1_1"
-              className="tooth-group"
-              data-name="1.1"
-              transform="translate(560,0) scale(0.6)"
-            >
-              <use xlinkHref="#design7" />
-            </g>
-            <text x="603" y="-2" className="tooth-name">
-              1.1
-            </text>
-            <foreignObject x="583" y="-45" width="60" height="30" id="input8">
-              <div xmlns="http://www.w3.org/1999/xhtml">
-                <input type="text" className="letra" />
-              </div>
-            </foreignObject>
-
-            <g
-              id="tooth_2_1"
-              className="tooth-group"
-              data-name="2.1"
-              transform="translate(640,0) scale(0.6)"
-            >
-              <use xlinkHref="#design7" />
-            </g>
-            <text x="685" y="-2" className="tooth-name">
-              2.1
-            </text>
-            <foreignObject x="660" y="-45" width="60" height="30" id="input9">
-              <div xmlns="http://www.w3.org/1999/xhtml">
-                <input type="text" className="letra" />
-              </div>
-            </foreignObject>
-
-            <g
-              id="tooth_2_2"
-              className="tooth-group"
-              data-name="2.2"
-              transform="translate(720,0) scale(0.6)"
-            >
-              <use xlinkHref="#design7" />
-            </g>
-            <text x="765" y="-3" className="tooth-name">
-              2.2
-            </text>
-            <foreignObject x="740" y="-45" width="60" height="30" id="input10">
-              <div xmlns="http://www.w3.org/1999/xhtml">
-                <input type="text" className="letra" />
-              </div>
-            </foreignObject>
-
-            <g
-              id="tooth_2_3"
-              className="tooth-group"
-              data-name="2.3"
-              transform="translate(800,0) scale(0.6)"
-            >
-              <use xlinkHref="#design7" />
-            </g>
-            <text x="845" y="-3" className="tooth-name">
-              2.3
-            </text>
-            <foreignObject x="820" y="-45" width="60" height="30" id="input11">
-              <div xmlns="http://www.w3.org/1999/xhtml">
-                <input type="text" className="letra" />
-              </div>
-            </foreignObject>
-
-            <g
-              id="tooth_2_4"
-              className="tooth-group"
-              data-name="2.4"
-              transform="translate(880,0) scale(0.6)"
-            >
-              <use xlinkHref="#design6" />
-            </g>
-            <text x="930" y="-3" className="tooth-name">
-              2.4
-            </text>
-            <foreignObject x="900" y="-45" width="68" height="30" id="input12">
-              <div xmlns="http://www.w3.org/1999/xhtml">
-                <input type="text" className="letra" />
-              </div>
-            </foreignObject>
-
-            <g
-              id="tooth_2_5"
-              className="tooth-group"
-              data-name="2.5"
-              transform="translate(960,0) scale(0.6)"
-            >
-              <use xlinkHref="#design3" />
-            </g>
-            <text x="1015" y="-3" className="tooth-name">
-              2.5
-            </text>
-            <foreignObject x="985" y="-45" width="68" height="30" id="input13">
-              <div xmlns="http://www.w3.org/1999/xhtml">
-                <input type="text" className="letra" />
-              </div>
-            </foreignObject>
-
-            <g
-              id="tooth_2_6"
-              className="tooth-group"
-              data-name="2.6"
-              transform="translate(1040,0) scale(0.6)"
-            >
-              <use xlinkHref="#design1" />
-            </g>
-            <text x="1090" y="-3" className="tooth-name">
-              2.6
-            </text>
-            <foreignObject x="1060" y="-45" width="68" height="30" id="input14">
-              <div xmlns="http://www.w3.org/1999/xhtml">
-                <input type="text" className="letra" />
-              </div>
-            </foreignObject>
-
-            <g
-              id="tooth_2_7"
-              className="tooth-group"
-              data-name="2.7"
-              transform="translate(1120,0) scale(0.6)"
-            >
-              <use xlinkHref="#design1" />
-            </g>
-            <text x="1175" y="-3" className="tooth-name">
-              2.7
-            </text>
-            <foreignObject x="1145" y="-45" width="68" height="30" id="input15">
-              <div xmlns="http://www.w3.org/1999/xhtml">
-                <input type="text" className="letra" />
-              </div>
-            </foreignObject>
-
-            <g
-              id="tooth_2_8"
-              className="tooth-group"
-              data-name="2.8"
-              transform="translate(1200,0) scale(0.6)"
-            >
-              <use xlinkHref="#design1" />
-            </g>
-            <text x="1250" y="-3" className="tooth-name">
-              2.8
-            </text>
-            <foreignObject x="1220" y="-45" width="68" height="30" id="input16">
-              <div xmlns="http://www.w3.org/1999/xhtml">
-                <input type="text" className="letra" />
-              </div>
-            </foreignObject>
-          </g>
-
-          {/* FILA 2 (17..26) */}
-          <g id="fila2" transform="translate(261,320)">
-            <g
-              id="tooth_5_1"
-              className="tooth-group"
-              data-name="5.5"
-              transform="translate(0,0) scale(0.6)"
-            >
-              <use xlinkHref="#design1" />
-            </g>
-            <text x="55" y="1" className="tooth-name">
-              5.5
-            </text>
-            <foreignObject x="20" y="-45" width="68" height="30" id="input17">
-              <div xmlns="http://www.w3.org/1999/xhtml">
-                <input type="text" className="letra" />
-              </div>
-            </foreignObject>
-
-            <g
-              id="tooth_5_2"
-              className="tooth-group"
-              data-name="5.4"
-              transform="translate(80,0) scale(0.6)"
-            >
-              <use xlinkHref="#design1" />
-            </g>
-            <text x="135" y="1" className="tooth-name">
-              5.4
-            </text>
-            <foreignObject x="100" y="-45" width="68" height="30" id="input18">
-              <div xmlns="http://www.w3.org/1999/xhtml">
-                <input type="text" className="letra" />
-              </div>
-            </foreignObject>
-
-            <g
-              id="tooth_5_3"
-              className="tooth-group"
-              data-name="5.3"
-              transform="translate(160,0) scale(0.6)"
-            >
-              <use xlinkHref="#design7" />
-            </g>
-            <text x="210" y="1" className="tooth-name">
-              5.3
-            </text>
-            <foreignObject x="180" y="-45" width="60" height="30" id="input19">
-              <div xmlns="http://www.w3.org/1999/xhtml">
-                <input type="text" className="letra" />
-              </div>
-            </foreignObject>
-
-            <g
-              id="tooth_5_4"
-              className="tooth-group"
-              data-name="5.2"
-              transform="translate(240,0) scale(0.6)"
-            >
-              <use xlinkHref="#design7" />
-            </g>
-            <text x="285" y="1" className="tooth-name">
-              5.2
-            </text>
-            <foreignObject x="255" y="-45" width="60" height="30" id="input20">
-              <div xmlns="http://www.w3.org/1999/xhtml">
-                <input type="text" className="letra" />
-              </div>
-            </foreignObject>
-
-            <g
-              id="tooth_5_5"
-              className="tooth-group"
-              data-name="5.1"
-              transform="translate(320,0) scale(0.6)"
-            >
-              <use xlinkHref="#design7" />
-            </g>
-            <text x="365" y="1" className="tooth-name">
-              5.1
-            </text>
-            <foreignObject x="335" y="-45" width="60" height="30" id="input21">
-              <div xmlns="http://www.w3.org/1999/xhtml">
-                <input type="text" className="letra" />
-              </div>
-            </foreignObject>
-
-            <g
-              id="tooth_6_1"
-              className="tooth-group"
-              data-name="6.1"
-              transform="translate(400,0) scale(0.6)"
-            >
-              <use xlinkHref="#design7" />
-            </g>
-            <text x="445" y="1" className="tooth-name">
-              6.1
-            </text>
-            <foreignObject x="415" y="-45" width="60" height="30" id="input22">
-              <div xmlns="http://www.w3.org/1999/xhtml">
-                <input type="text" className="letra" />
-              </div>
-            </foreignObject>
-
-            <g
-              id="tooth_6_2"
-              className="tooth-group"
-              data-name="6.2"
-              transform="translate(480,0) scale(0.6)"
-            >
-              <use xlinkHref="#design7" />
-            </g>
-            <text x="525" y="1" className="tooth-name">
-              6.2
-            </text>
-            <foreignObject x="495" y="-45" width="60" height="30" id="input23">
-              <div xmlns="http://www.w3.org/1999/xhtml">
-                <input type="text" className="letra" />
-              </div>
-            </foreignObject>
-
-            <g
-              id="tooth_6_3"
-              className="tooth-group"
-              data-name="6.3"
-              transform="translate(560,0) scale(0.6)"
-            >
-              <use xlinkHref="#design7" />
-            </g>
-            <text x="605" y="1" className="tooth-name">
-              6.3
-            </text>
-            <foreignObject x="575" y="-45" width="60" height="30" id="input24">
-              <div xmlns="http://www.w3.org/1999/xhtml">
-                <input type="text" className="letra" />
-              </div>
-            </foreignObject>
-
-            <g
-              id="tooth_6_4"
-              className="tooth-group"
-              data-name="6.4"
-              transform="translate(640,0) scale(0.6)"
-            >
-              <use xlinkHref="#design1" />
-            </g>
-            <text x="700" y="1" className="tooth-name">
-              6.4
-            </text>
-            <foreignObject x="670" y="-45" width="68" height="30" id="input25">
-              <div xmlns="http://www.w3.org/1999/xhtml">
-                <input type="text" className="letra" />
-              </div>
-            </foreignObject>
-
-            <g
-              id="tooth_6_5"
-              className="tooth-group"
-              data-name="6.5"
-              transform="translate(720,0) scale(0.6)"
-            >
-              <use xlinkHref="#design1" />
-            </g>
-            <text x="780" y="1" className="tooth-name">
-              6.5
-            </text>
-            <foreignObject x="750" y="-45" width="68" height="30" id="input26">
-              <div xmlns="http://www.w3.org/1999/xhtml">
-                <input type="text" className="letra" />
-              </div>
-            </foreignObject>
-          </g>
-
-          {/* FILA 3 (27..36) */}
-          <g id="fila3" transform="translate(261,570)">
-            <g
-              id="tooth_8_5"
-              className="tooth-group"
-              data-name="8.5"
-              transform="translate(0,-70) scale(0.6)"
-            >
-              <use xlinkHref="#design2" />
-            </g>
-            <text x="55" y="50" className="tooth-name">
-              8.5
-            </text>
-            <foreignObject x="25" y="70" width="68" height="30" id="input27">
-              <div xmlns="http://www.w3.org/1999/xhtml">
-                <input type="text" className="letra" />
-              </div>
-            </foreignObject>
-
-            <g
-              id="tooth_8_4"
-              className="tooth-group"
-              data-name="8.4"
-              transform="translate(80,-70) scale(0.6)"
-            >
-              <use xlinkHref="#design2" />
-            </g>
-            <text x="140" y="50" className="tooth-name">
-              8.4
-            </text>
-            <foreignObject x="105" y="70" width="68" height="30" id="input28">
-              <div xmlns="http://www.w3.org/1999/xhtml">
-                <input type="text" className="letra" />
-              </div>
-            </foreignObject>
-
-            <g
-              id="tooth_8_3"
-              className="tooth-group"
-              data-name="8.3"
-              transform="translate(160,-95) scale(0.6)"
-            >
-              <use xlinkHref="#design8" />
-            </g>
-            <text x="205" y="50" className="tooth-name">
-              8.3
-            </text>
-            <foreignObject x="185" y="70" width="55" height="30" id="input29">
-              <div xmlns="http://www.w3.org/1999/xhtml">
-                <input type="text" className="letra" />
-              </div>
-            </foreignObject>
-
-            <g
-              id="tooth_8_2"
-              className="tooth-group"
-              data-name="8.2"
-              transform="translate(240,-95) scale(0.6)"
-            >
-              <use xlinkHref="#design8" />
-            </g>
-            <text x="285" y="50" className="tooth-name">
-              8.2
-            </text>
-            <foreignObject x="260" y="70" width="60" height="30" id="input30">
-              <div xmlns="http://www.w3.org/1999/xhtml">
-                <input type="text" className="letra" />
-              </div>
-            </foreignObject>
-
-            <g
-              id="tooth_8_1"
-              className="tooth-group"
-              data-name="8.1"
-              transform="translate(320,-95) scale(0.6)"
-            >
-              <use xlinkHref="#design8" />
-            </g>
-            <text x="365" y="50" className="tooth-name">
-              8.1
-            </text>
-            <foreignObject x="340" y="70" width="60" height="30" id="input31">
-              <div xmlns="http://www.w3.org/1999/xhtml">
-                <input type="text" className="letra" />
-              </div>
-            </foreignObject>
-
-            <g
-              id="tooth_7_1"
-              className="tooth-group"
-              data-name="7.1"
-              transform="translate(400,-95) scale(0.6)"
-            >
-              <use xlinkHref="#design8" />
-            </g>
-            <text x="440" y="50" className="tooth-name">
-              7.1
-            </text>
-            <foreignObject x="420" y="70" width="65" height="30" id="input32">
-              <div xmlns="http://www.w3.org/1999/xhtml">
-                <input type="text" className="letra" />
-              </div>
-            </foreignObject>
-
-            <g
-              id="tooth_7_2"
-              className="tooth-group"
-              data-name="7.2"
-              transform="translate(480,-95) scale(0.6)"
-            >
-              <use xlinkHref="#design8" />
-            </g>
-            <text x="525" y="50" className="tooth-name">
-              7.2
-            </text>
-            <foreignObject x="500" y="70" width="60" height="30" id="input33">
-              <div xmlns="http://www.w3.org/1999/xhtml">
-                <input type="text" className="letra" />
-              </div>
-            </foreignObject>
-
-            <g
-              id="tooth_7_3"
-              className="tooth-group"
-              data-name="7.3"
-              transform="translate(560,-95) scale(0.6)"
-            >
-              <use xlinkHref="#design8" />
-            </g>
-            <text x="605" y="50" className="tooth-name">
-              7.3
-            </text>
-            <foreignObject x="575" y="70" width="65" height="30" id="input34">
-              <div xmlns="http://www.w3.org/1999/xhtml">
-                <input type="text" className="letra" />
-              </div>
-            </foreignObject>
-
-            <g
-              id="tooth_7_4"
-              className="tooth-group"
-              data-name="7.4"
-              transform="translate(640,-70) scale(0.6)"
-            >
-              <use xlinkHref="#design2" />
-            </g>
-            <text x="700" y="50" className="tooth-name">
-              7.4
-            </text>
-            <foreignObject x="665" y="70" width="68" height="30" id="input35">
-              <div xmlns="http://www.w3.org/1999/xhtml">
-                <input type="text" className="letra" />
-              </div>
-            </foreignObject>
-
-            <g
-              id="tooth_7_5"
-              className="tooth-group"
-              data-name="7.5"
-              transform="translate(720,-70) scale(0.6)"
-            >
-              <use xlinkHref="#design2" />
-            </g>
-            <text x="780" y="50" className="tooth-name">
-              7.5
-            </text>
-            <foreignObject x="750" y="70" width="68" height="30" id="input36">
-              <div xmlns="http://www.w3.org/1999/xhtml">
-                <input type="text" className="letra" />
-              </div>
-            </foreignObject>
-          </g>
-
-          {/* FILA 4 (37..52) */}
-          <g id="fila4" transform="translate(20,795)">
-            <g
-              id="tooth_4_8"
-              className="tooth-group"
-              data-name="4.8"
-              transform="translate(0,-80) scale(0.6)"
-            >
-              <use xlinkHref="#design2" />
-            </g>
-            <text x="55" y="50" className="tooth-name">
-              4.8
-            </text>
-            <foreignObject x="30" y="60" width="60" height="30" id="input37">
-              <div xmlns="http://www.w3.org/1999/xhtml">
-                <input type="text" className="letra" />
-              </div>
-            </foreignObject>
-
-            <g
-              id="tooth_4_7"
-              className="tooth-group"
-              data-name="4.7"
-              transform="translate(80,-80) scale(0.6)"
-            >
-              <use xlinkHref="#design2" />
-            </g>
-            <text x="135" y="50" className="tooth-name">
-              4.7
-            </text>
-            <foreignObject x="110" y="60" width="60" height="30" id="input38">
-              <div xmlns="http://www.w3.org/1999/xhtml">
-                <input type="text" className="letra" />
-              </div>
-            </foreignObject>
-
-            <g
-              id="tooth_4_6"
-              className="tooth-group"
-              data-name="4.6"
-              transform="translate(160,-80) scale(0.6)"
-            >
-              <use xlinkHref="#design2" />
-            </g>
-            <text x="215" y="50" className="tooth-name">
-              4.6
-            </text>
-            <foreignObject x="190" y="60" width="60" height="30" id="input39">
-              <div xmlns="http://www.w3.org/1999/xhtml">
-                <input type="text" className="letra" />
-              </div>
-            </foreignObject>
-
-            <g
-              id="tooth_4_5"
-              className="tooth-group"
-              data-name="4.5"
-              transform="translate(240,-105) scale(0.6)"
-            >
-              <use xlinkHref="#design4" />
-            </g>
-            <text x="290" y="50" className="tooth-name">
-              4.5
-            </text>
-            <foreignObject x="265" y="60" width="60" height="30" id="input40">
-              <div xmlns="http://www.w3.org/1999/xhtml">
-                <input type="text" className="letra" />
-              </div>
-            </foreignObject>
-
-            <g
-              id="tooth_4_4"
-              className="tooth-group"
-              data-name="4.4"
-              transform="translate(320,-105) scale(0.6)"
-            >
-              <use xlinkHref="#design4" />
-            </g>
-            <text x="375" y="50" className="tooth-name">
-              4.4
-            </text>
-            <foreignObject x="350" y="60" width="60" height="30" id="input41">
-              <div xmlns="http://www.w3.org/1999/xhtml">
-                <input type="text" className="letra" />
-              </div>
-            </foreignObject>
-
-            <g
-              id="tooth_4_3"
-              className="tooth-group"
-              data-name="4.3"
-              transform="translate(400,-105) scale(0.6)"
-            >
-              <use xlinkHref="#design8" />
-            </g>
-            <text x="445" y="50" className="tooth-name">
-              4.3
-            </text>
-            <foreignObject x="430" y="60" width="60" height="30" id="input42">
-              <div xmlns="http://www.w3.org/1999/xhtml">
-                <input type="text" className="letra" />
-              </div>
-            </foreignObject>
-
-            <g
-              id="tooth_4_2"
-              className="tooth-group"
-              data-name="4.2"
-              transform="translate(480,-105) scale(0.6)"
-            >
-              <use xlinkHref="#design8" />
-            </g>
-            <text x="525" y="50" className="tooth-name">
-              4.2
-            </text>
-            <foreignObject x="505" y="60" width="60" height="30" id="input43">
-              <div xmlns="http://www.w3.org/1999/xhtml">
-                <input type="text" className="letra" />
-              </div>
-            </foreignObject>
-
-            <g
-              id="tooth_4_1"
-              className="tooth-group"
-              data-name="4.1"
-              transform="translate(560,-105) scale(0.6)"
-            >
-              <use xlinkHref="#design8" />
-            </g>
-            <text x="605" y="50" className="tooth-name">
-              4.1
-            </text>
-            <foreignObject x="580" y="60" width="60" height="30" id="input44">
-              <div xmlns="http://www.w3.org/1999/xhtml">
-                <input type="text" className="letra" />
-              </div>
-            </foreignObject>
-
-            <g
-              id="tooth_3_1"
-              className="tooth-group"
-              data-name="3.1"
-              transform="translate(640,-105) scale(0.6)"
-            >
-              <use xlinkHref="#design8" />
-            </g>
-            <text x="685" y="50" className="tooth-name">
-              3.1
-            </text>
-            <foreignObject x="662" y="60" width="55" height="30" id="input45">
-              <div xmlns="http://www.w3.org/1999/xhtml">
-                <input type="text" className="letra" />
-              </div>
-            </foreignObject>
-
-            <g
-              id="tooth_3_2"
-              className="tooth-group"
-              data-name="3.2"
-              transform="translate(720,-105) scale(0.6)"
-            >
-              <use xlinkHref="#design8" />
-            </g>
-            <text x="765" y="50" className="tooth-name">
-              3.2
-            </text>
-            <foreignObject x="740" y="60" width="60" height="30" id="input46">
-              <div xmlns="http://www.w3.org/1999/xhtml">
-                <input type="text" className="letra" />
-              </div>
-            </foreignObject>
-
-            <g
-              id="tooth_3_3"
-              className="tooth-group"
-              data-name="3.3"
-              transform="translate(800,-105) scale(0.6)"
-            >
-              <use xlinkHref="#design8" />
-            </g>
-            <text x="845" y="50" className="tooth-name">
-              3.3
-            </text>
-            <foreignObject x="820" y="60" width="60" height="30" id="input47">
-              <div xmlns="http://www.w3.org/1999/xhtml">
-                <input type="text" className="letra" />
-              </div>
-            </foreignObject>
-
-            <g
-              id="tooth_3_4"
-              className="tooth-group"
-              data-name="3.4"
-              transform="translate(880,-105) scale(0.6)"
-            >
-              <use xlinkHref="#design4" />
-            </g>
-            <text x="935" y="50" className="tooth-name">
-              3.4
-            </text>
-            <foreignObject x="910" y="60" width="60" height="30" id="input48">
-              <div xmlns="http://www.w3.org/1999/xhtml">
-                <input type="text" className="letra" />
-              </div>
-            </foreignObject>
-
-            <g
-              id="tooth_3_5"
-              className="tooth-group"
-              data-name="3.5"
-              transform="translate(960,-105) scale(0.6)"
-            >
-              <use xlinkHref="#design4" />
-            </g>
-            <text x="1010" y="50" className="tooth-name">
-              3.5
-            </text>
-            <foreignObject x="990" y="60" width="60" height="30" id="input49">
-              <div xmlns="http://www.w3.org/1999/xhtml">
-                <input type="text" className="letra" />
-              </div>
-            </foreignObject>
-
-            <g
-              id="tooth_3_6"
-              className="tooth-group"
-              data-name="3.6"
-              transform="translate(1040,-80) scale(0.6)"
-            >
-              <use xlinkHref="#design2" />
-            </g>
-            <text x="1095" y="50" className="tooth-name">
-              3.6
-            </text>
-            <foreignObject x="1070" y="60" width="60" height="30" id="input50">
-              <div xmlns="http://www.w3.org/1999/xhtml">
-                <input type="text" className="letra" />
-              </div>
-            </foreignObject>
-
-            <g
-              id="tooth_3_7"
-              className="tooth-group"
-              data-name="3.7"
-              transform="translate(1120,-80) scale(0.6)"
-            >
-              <use xlinkHref="#design2" />
-            </g>
-            <text x="1175" y="50" className="tooth-name">
-              3.7
-            </text>
-            <foreignObject x="1150" y="60" width="60" height="30" id="input51">
-              <div xmlns="http://www.w3.org/1999/xhtml">
-                <input type="text" className="letra" />
-              </div>
-            </foreignObject>
-
-            <g
-              id="tooth_3_8"
-              className="tooth-group"
-              data-name="3.8"
-              transform="translate(1200,-80) scale(0.6)"
-            >
-              <use xlinkHref="#design2" />
-            </g>
-            <text x="1255" y="50" className="tooth-name">
-              3.8
-            </text>
-            <foreignObject x="1230" y="60" width="65" height="30" id="input52">
-              <div xmlns="http://www.w3.org/1999/xhtml">
-                <input type="text" className="letra" />
-              </div>
-            </foreignObject>
-          </g>
-          <foreignObject x="50" y="900" width="1270" height="160">
-            <div xmlns="http://www.w3.org/1999/xhtml">
-              <label
-                htmlFor="inputEspecificaciones"
-                style={{ fontSize: '14px', fontWeight: 'bold' }}
+              <g
+                id="tooth_1_7"
+                className="tooth-group"
+                data-name="1.7"
+                transform="translate(80,0) scale(0.6)"
               >
-                Especificaciones:
-              </label>
+                <use xlinkHref="#design1" />
+              </g>
+              <text x="135" y="-2" className="tooth-name">
+                1.7
+              </text>
+              <foreignObject x="105" y="-45" width="68" height="30" id="input2">
+                <div xmlns="http://www.w3.org/1999/xhtml">
+                  <input type="text" className="letra" />
+                </div>
+              </foreignObject>
 
-              <textarea
-                id="inputEspecificaciones"
-                className="letra"
-                rows="2"
-                style={{ width: '100%', resize: 'none' }}
-              ></textarea>
-            </div>
-          </foreignObject>
-          <foreignObject x="50" y="1000" width="1270" height="60">
-            <div xmlns="http://www.w3.org/1999/xhtml">
-              <label
-                htmlFor="inputObservaciones"
-                style={{ fontSize: '14px', fontWeight: 'bold' }}
+              <g
+                id="tooth_1_6"
+                className="tooth-group"
+                data-name="1.6"
+                transform="translate(160,0) scale(0.6)"
               >
-                Observaciones:
-              </label>
+                <use xlinkHref="#design1" />
+              </g>
+              <text x="215" y="-2" className="tooth-name">
+                1.6
+              </text>
+              <foreignObject x="185" y="-45" width="68" height="30" id="input3">
+                <div xmlns="http://www.w3.org/1999/xhtml">
+                  <input type="text" className="letra" />
+                </div>
+              </foreignObject>
 
-              <textarea
-                id="inputObservaciones"
-                className="letra"
-                rows="2"
-                style={{ width: '100%', resize: 'none' }}
-              ></textarea>
-            </div>
-          </foreignObject>
-        </svg>
+              <g
+                id="tooth_1_5"
+                className="tooth-group"
+                data-name="1.5"
+                transform="translate(240,0) scale(0.6)"
+              >
+                <use xlinkHref="#design3" />
+              </g>
+              <text x="295" y="-2" className="tooth-name">
+                1.5
+              </text>
+              <foreignObject x="265" y="-45" width="68" height="30" id="input4">
+                <div xmlns="http://www.w3.org/1999/xhtml">
+                  <input type="text" className="letra" />
+                </div>
+              </foreignObject>
+
+              <g
+                id="tooth_1_4"
+                className="tooth-group"
+                data-name="1.4"
+                transform="translate(320,0) scale(0.6)"
+              >
+                <use xlinkHref="#design5" />
+              </g>
+              <text x="375" y="-2" className="tooth-name">
+                1.4
+              </text>
+              <foreignObject x="345" y="-45" width="68" height="30" id="input5">
+                <div xmlns="http://www.w3.org/1999/xhtml">
+                  <input type="text" className="letra" />
+                </div>
+              </foreignObject>
+
+              <g
+                id="tooth_1_3"
+                className="tooth-group"
+                data-name="1.3"
+                transform="translate(400,0) scale(0.6)"
+              >
+                <use xlinkHref="#design7" />
+              </g>
+              <text x="455" y="-2" className="tooth-name">
+                1.3
+              </text>
+              <foreignObject x="430" y="-45" width="60" height="30" id="input6">
+                <div xmlns="http://www.w3.org/1999/xhtml">
+                  <input type="text" className="letra" />
+                </div>
+              </foreignObject>
+
+              <g
+                id="tooth_1_2"
+                className="tooth-group"
+                data-name="1.2"
+                transform="translate(480,0) scale(0.6)"
+              >
+                <use xlinkHref="#design7" />
+              </g>
+              <text x="530" y="-2" className="tooth-name">
+                1.2
+              </text>
+              <foreignObject x="506" y="-45" width="60" height="30" id="input7">
+                <div xmlns="http://www.w3.org/1999/xhtml">
+                  <input type="text" className="letra" />
+                </div>
+              </foreignObject>
+
+              <g
+                id="tooth_1_1"
+                className="tooth-group"
+                data-name="1.1"
+                transform="translate(560,0) scale(0.6)"
+              >
+                <use xlinkHref="#design7" />
+              </g>
+              <text x="603" y="-2" className="tooth-name">
+                1.1
+              </text>
+              <foreignObject x="583" y="-45" width="60" height="30" id="input8">
+                <div xmlns="http://www.w3.org/1999/xhtml">
+                  <input type="text" className="letra" />
+                </div>
+              </foreignObject>
+
+              <g
+                id="tooth_2_1"
+                className="tooth-group"
+                data-name="2.1"
+                transform="translate(640,0) scale(0.6)"
+              >
+                <use xlinkHref="#design7" />
+              </g>
+              <text x="685" y="-2" className="tooth-name">
+                2.1
+              </text>
+              <foreignObject x="660" y="-45" width="60" height="30" id="input9">
+                <div xmlns="http://www.w3.org/1999/xhtml">
+                  <input type="text" className="letra" />
+                </div>
+              </foreignObject>
+
+              <g
+                id="tooth_2_2"
+                className="tooth-group"
+                data-name="2.2"
+                transform="translate(720,0) scale(0.6)"
+              >
+                <use xlinkHref="#design7" />
+              </g>
+              <text x="765" y="-3" className="tooth-name">
+                2.2
+              </text>
+              <foreignObject
+                x="740"
+                y="-45"
+                width="60"
+                height="30"
+                id="input10"
+              >
+                <div xmlns="http://www.w3.org/1999/xhtml">
+                  <input type="text" className="letra" />
+                </div>
+              </foreignObject>
+
+              <g
+                id="tooth_2_3"
+                className="tooth-group"
+                data-name="2.3"
+                transform="translate(800,0) scale(0.6)"
+              >
+                <use xlinkHref="#design7" />
+              </g>
+              <text x="845" y="-3" className="tooth-name">
+                2.3
+              </text>
+              <foreignObject
+                x="820"
+                y="-45"
+                width="60"
+                height="30"
+                id="input11"
+              >
+                <div xmlns="http://www.w3.org/1999/xhtml">
+                  <input type="text" className="letra" />
+                </div>
+              </foreignObject>
+
+              <g
+                id="tooth_2_4"
+                className="tooth-group"
+                data-name="2.4"
+                transform="translate(880,0) scale(0.6)"
+              >
+                <use xlinkHref="#design6" />
+              </g>
+              <text x="930" y="-3" className="tooth-name">
+                2.4
+              </text>
+              <foreignObject
+                x="900"
+                y="-45"
+                width="68"
+                height="30"
+                id="input12"
+              >
+                <div xmlns="http://www.w3.org/1999/xhtml">
+                  <input type="text" className="letra" />
+                </div>
+              </foreignObject>
+
+              <g
+                id="tooth_2_5"
+                className="tooth-group"
+                data-name="2.5"
+                transform="translate(960,0) scale(0.6)"
+              >
+                <use xlinkHref="#design3" />
+              </g>
+              <text x="1015" y="-3" className="tooth-name">
+                2.5
+              </text>
+              <foreignObject
+                x="985"
+                y="-45"
+                width="68"
+                height="30"
+                id="input13"
+              >
+                <div xmlns="http://www.w3.org/1999/xhtml">
+                  <input type="text" className="letra" />
+                </div>
+              </foreignObject>
+
+              <g
+                id="tooth_2_6"
+                className="tooth-group"
+                data-name="2.6"
+                transform="translate(1040,0) scale(0.6)"
+              >
+                <use xlinkHref="#design1" />
+              </g>
+              <text x="1090" y="-3" className="tooth-name">
+                2.6
+              </text>
+              <foreignObject
+                x="1060"
+                y="-45"
+                width="68"
+                height="30"
+                id="input14"
+              >
+                <div xmlns="http://www.w3.org/1999/xhtml">
+                  <input type="text" className="letra" />
+                </div>
+              </foreignObject>
+
+              <g
+                id="tooth_2_7"
+                className="tooth-group"
+                data-name="2.7"
+                transform="translate(1120,0) scale(0.6)"
+              >
+                <use xlinkHref="#design1" />
+              </g>
+              <text x="1175" y="-3" className="tooth-name">
+                2.7
+              </text>
+              <foreignObject
+                x="1145"
+                y="-45"
+                width="68"
+                height="30"
+                id="input15"
+              >
+                <div xmlns="http://www.w3.org/1999/xhtml">
+                  <input type="text" className="letra" />
+                </div>
+              </foreignObject>
+
+              <g
+                id="tooth_2_8"
+                className="tooth-group"
+                data-name="2.8"
+                transform="translate(1200,0) scale(0.6)"
+              >
+                <use xlinkHref="#design1" />
+              </g>
+              <text x="1250" y="-3" className="tooth-name">
+                2.8
+              </text>
+              <foreignObject
+                x="1220"
+                y="-45"
+                width="68"
+                height="30"
+                id="input16"
+              >
+                <div xmlns="http://www.w3.org/1999/xhtml">
+                  <input type="text" className="letra" />
+                </div>
+              </foreignObject>
+            </g>
+
+            {/* FILA 2 (17..26) */}
+            <g id="fila2" transform="translate(261,320)">
+              <g
+                id="tooth_5_1"
+                className="tooth-group"
+                data-name="5.5"
+                transform="translate(0,0) scale(0.6)"
+              >
+                <use xlinkHref="#design1" />
+              </g>
+              <text x="55" y="1" className="tooth-name">
+                5.5
+              </text>
+              <foreignObject x="20" y="-45" width="68" height="30" id="input17">
+                <div xmlns="http://www.w3.org/1999/xhtml">
+                  <input type="text" className="letra" />
+                </div>
+              </foreignObject>
+
+              <g
+                id="tooth_5_2"
+                className="tooth-group"
+                data-name="5.4"
+                transform="translate(80,0) scale(0.6)"
+              >
+                <use xlinkHref="#design1" />
+              </g>
+              <text x="135" y="1" className="tooth-name">
+                5.4
+              </text>
+              <foreignObject
+                x="100"
+                y="-45"
+                width="68"
+                height="30"
+                id="input18"
+              >
+                <div xmlns="http://www.w3.org/1999/xhtml">
+                  <input type="text" className="letra" />
+                </div>
+              </foreignObject>
+
+              <g
+                id="tooth_5_3"
+                className="tooth-group"
+                data-name="5.3"
+                transform="translate(160,0) scale(0.6)"
+              >
+                <use xlinkHref="#design7" />
+              </g>
+              <text x="210" y="1" className="tooth-name">
+                5.3
+              </text>
+              <foreignObject
+                x="180"
+                y="-45"
+                width="60"
+                height="30"
+                id="input19"
+              >
+                <div xmlns="http://www.w3.org/1999/xhtml">
+                  <input type="text" className="letra" />
+                </div>
+              </foreignObject>
+
+              <g
+                id="tooth_5_4"
+                className="tooth-group"
+                data-name="5.2"
+                transform="translate(240,0) scale(0.6)"
+              >
+                <use xlinkHref="#design7" />
+              </g>
+              <text x="285" y="1" className="tooth-name">
+                5.2
+              </text>
+              <foreignObject
+                x="255"
+                y="-45"
+                width="60"
+                height="30"
+                id="input20"
+              >
+                <div xmlns="http://www.w3.org/1999/xhtml">
+                  <input type="text" className="letra" />
+                </div>
+              </foreignObject>
+
+              <g
+                id="tooth_5_5"
+                className="tooth-group"
+                data-name="5.1"
+                transform="translate(320,0) scale(0.6)"
+              >
+                <use xlinkHref="#design7" />
+              </g>
+              <text x="365" y="1" className="tooth-name">
+                5.1
+              </text>
+              <foreignObject
+                x="335"
+                y="-45"
+                width="60"
+                height="30"
+                id="input21"
+              >
+                <div xmlns="http://www.w3.org/1999/xhtml">
+                  <input type="text" className="letra" />
+                </div>
+              </foreignObject>
+
+              <g
+                id="tooth_6_1"
+                className="tooth-group"
+                data-name="6.1"
+                transform="translate(400,0) scale(0.6)"
+              >
+                <use xlinkHref="#design7" />
+              </g>
+              <text x="445" y="1" className="tooth-name">
+                6.1
+              </text>
+              <foreignObject
+                x="415"
+                y="-45"
+                width="60"
+                height="30"
+                id="input22"
+              >
+                <div xmlns="http://www.w3.org/1999/xhtml">
+                  <input type="text" className="letra" />
+                </div>
+              </foreignObject>
+
+              <g
+                id="tooth_6_2"
+                className="tooth-group"
+                data-name="6.2"
+                transform="translate(480,0) scale(0.6)"
+              >
+                <use xlinkHref="#design7" />
+              </g>
+              <text x="525" y="1" className="tooth-name">
+                6.2
+              </text>
+              <foreignObject
+                x="495"
+                y="-45"
+                width="60"
+                height="30"
+                id="input23"
+              >
+                <div xmlns="http://www.w3.org/1999/xhtml">
+                  <input type="text" className="letra" />
+                </div>
+              </foreignObject>
+
+              <g
+                id="tooth_6_3"
+                className="tooth-group"
+                data-name="6.3"
+                transform="translate(560,0) scale(0.6)"
+              >
+                <use xlinkHref="#design7" />
+              </g>
+              <text x="605" y="1" className="tooth-name">
+                6.3
+              </text>
+              <foreignObject
+                x="575"
+                y="-45"
+                width="60"
+                height="30"
+                id="input24"
+              >
+                <div xmlns="http://www.w3.org/1999/xhtml">
+                  <input type="text" className="letra" />
+                </div>
+              </foreignObject>
+
+              <g
+                id="tooth_6_4"
+                className="tooth-group"
+                data-name="6.4"
+                transform="translate(640,0) scale(0.6)"
+              >
+                <use xlinkHref="#design1" />
+              </g>
+              <text x="700" y="1" className="tooth-name">
+                6.4
+              </text>
+              <foreignObject
+                x="670"
+                y="-45"
+                width="68"
+                height="30"
+                id="input25"
+              >
+                <div xmlns="http://www.w3.org/1999/xhtml">
+                  <input type="text" className="letra" />
+                </div>
+              </foreignObject>
+
+              <g
+                id="tooth_6_5"
+                className="tooth-group"
+                data-name="6.5"
+                transform="translate(720,0) scale(0.6)"
+              >
+                <use xlinkHref="#design1" />
+              </g>
+              <text x="780" y="1" className="tooth-name">
+                6.5
+              </text>
+              <foreignObject
+                x="750"
+                y="-45"
+                width="68"
+                height="30"
+                id="input26"
+              >
+                <div xmlns="http://www.w3.org/1999/xhtml">
+                  <input type="text" className="letra" />
+                </div>
+              </foreignObject>
+            </g>
+
+            {/* FILA 3 (27..36) */}
+            <g id="fila3" transform="translate(261,570)">
+              <g
+                id="tooth_8_5"
+                className="tooth-group"
+                data-name="8.5"
+                transform="translate(0,-70) scale(0.6)"
+              >
+                <use xlinkHref="#design2" />
+              </g>
+              <text x="55" y="50" className="tooth-name">
+                8.5
+              </text>
+              <foreignObject x="25" y="70" width="68" height="30" id="input27">
+                <div xmlns="http://www.w3.org/1999/xhtml">
+                  <input type="text" className="letra" />
+                </div>
+              </foreignObject>
+
+              <g
+                id="tooth_8_4"
+                className="tooth-group"
+                data-name="8.4"
+                transform="translate(80,-70) scale(0.6)"
+              >
+                <use xlinkHref="#design2" />
+              </g>
+              <text x="140" y="50" className="tooth-name">
+                8.4
+              </text>
+              <foreignObject x="105" y="70" width="68" height="30" id="input28">
+                <div xmlns="http://www.w3.org/1999/xhtml">
+                  <input type="text" className="letra" />
+                </div>
+              </foreignObject>
+
+              <g
+                id="tooth_8_3"
+                className="tooth-group"
+                data-name="8.3"
+                transform="translate(160,-95) scale(0.6)"
+              >
+                <use xlinkHref="#design8" />
+              </g>
+              <text x="205" y="50" className="tooth-name">
+                8.3
+              </text>
+              <foreignObject x="185" y="70" width="55" height="30" id="input29">
+                <div xmlns="http://www.w3.org/1999/xhtml">
+                  <input type="text" className="letra" />
+                </div>
+              </foreignObject>
+
+              <g
+                id="tooth_8_2"
+                className="tooth-group"
+                data-name="8.2"
+                transform="translate(240,-95) scale(0.6)"
+              >
+                <use xlinkHref="#design8" />
+              </g>
+              <text x="285" y="50" className="tooth-name">
+                8.2
+              </text>
+              <foreignObject x="260" y="70" width="60" height="30" id="input30">
+                <div xmlns="http://www.w3.org/1999/xhtml">
+                  <input type="text" className="letra" />
+                </div>
+              </foreignObject>
+
+              <g
+                id="tooth_8_1"
+                className="tooth-group"
+                data-name="8.1"
+                transform="translate(320,-95) scale(0.6)"
+              >
+                <use xlinkHref="#design8" />
+              </g>
+              <text x="365" y="50" className="tooth-name">
+                8.1
+              </text>
+              <foreignObject x="340" y="70" width="60" height="30" id="input31">
+                <div xmlns="http://www.w3.org/1999/xhtml">
+                  <input type="text" className="letra" />
+                </div>
+              </foreignObject>
+
+              <g
+                id="tooth_7_1"
+                className="tooth-group"
+                data-name="7.1"
+                transform="translate(400,-95) scale(0.6)"
+              >
+                <use xlinkHref="#design8" />
+              </g>
+              <text x="440" y="50" className="tooth-name">
+                7.1
+              </text>
+              <foreignObject x="420" y="70" width="65" height="30" id="input32">
+                <div xmlns="http://www.w3.org/1999/xhtml">
+                  <input type="text" className="letra" />
+                </div>
+              </foreignObject>
+
+              <g
+                id="tooth_7_2"
+                className="tooth-group"
+                data-name="7.2"
+                transform="translate(480,-95) scale(0.6)"
+              >
+                <use xlinkHref="#design8" />
+              </g>
+              <text x="525" y="50" className="tooth-name">
+                7.2
+              </text>
+              <foreignObject x="500" y="70" width="60" height="30" id="input33">
+                <div xmlns="http://www.w3.org/1999/xhtml">
+                  <input type="text" className="letra" />
+                </div>
+              </foreignObject>
+
+              <g
+                id="tooth_7_3"
+                className="tooth-group"
+                data-name="7.3"
+                transform="translate(560,-95) scale(0.6)"
+              >
+                <use xlinkHref="#design8" />
+              </g>
+              <text x="605" y="50" className="tooth-name">
+                7.3
+              </text>
+              <foreignObject x="575" y="70" width="65" height="30" id="input34">
+                <div xmlns="http://www.w3.org/1999/xhtml">
+                  <input type="text" className="letra" />
+                </div>
+              </foreignObject>
+
+              <g
+                id="tooth_7_4"
+                className="tooth-group"
+                data-name="7.4"
+                transform="translate(640,-70) scale(0.6)"
+              >
+                <use xlinkHref="#design2" />
+              </g>
+              <text x="700" y="50" className="tooth-name">
+                7.4
+              </text>
+              <foreignObject x="665" y="70" width="68" height="30" id="input35">
+                <div xmlns="http://www.w3.org/1999/xhtml">
+                  <input type="text" className="letra" />
+                </div>
+              </foreignObject>
+
+              <g
+                id="tooth_7_5"
+                className="tooth-group"
+                data-name="7.5"
+                transform="translate(720,-70) scale(0.6)"
+              >
+                <use xlinkHref="#design2" />
+              </g>
+              <text x="780" y="50" className="tooth-name">
+                7.5
+              </text>
+              <foreignObject x="750" y="70" width="68" height="30" id="input36">
+                <div xmlns="http://www.w3.org/1999/xhtml">
+                  <input type="text" className="letra" />
+                </div>
+              </foreignObject>
+            </g>
+
+            {/* FILA 4 (37..52) */}
+            <g id="fila4" transform="translate(20,795)">
+              <g
+                id="tooth_4_8"
+                className="tooth-group"
+                data-name="4.8"
+                transform="translate(0,-80) scale(0.6)"
+              >
+                <use xlinkHref="#design2" />
+              </g>
+              <text x="55" y="50" className="tooth-name">
+                4.8
+              </text>
+              <foreignObject x="30" y="60" width="60" height="30" id="input37">
+                <div xmlns="http://www.w3.org/1999/xhtml">
+                  <input type="text" className="letra" />
+                </div>
+              </foreignObject>
+
+              <g
+                id="tooth_4_7"
+                className="tooth-group"
+                data-name="4.7"
+                transform="translate(80,-80) scale(0.6)"
+              >
+                <use xlinkHref="#design2" />
+              </g>
+              <text x="135" y="50" className="tooth-name">
+                4.7
+              </text>
+              <foreignObject x="110" y="60" width="60" height="30" id="input38">
+                <div xmlns="http://www.w3.org/1999/xhtml">
+                  <input type="text" className="letra" />
+                </div>
+              </foreignObject>
+
+              <g
+                id="tooth_4_6"
+                className="tooth-group"
+                data-name="4.6"
+                transform="translate(160,-80) scale(0.6)"
+              >
+                <use xlinkHref="#design2" />
+              </g>
+              <text x="215" y="50" className="tooth-name">
+                4.6
+              </text>
+              <foreignObject x="190" y="60" width="60" height="30" id="input39">
+                <div xmlns="http://www.w3.org/1999/xhtml">
+                  <input type="text" className="letra" />
+                </div>
+              </foreignObject>
+
+              <g
+                id="tooth_4_5"
+                className="tooth-group"
+                data-name="4.5"
+                transform="translate(240,-105) scale(0.6)"
+              >
+                <use xlinkHref="#design4" />
+              </g>
+              <text x="290" y="50" className="tooth-name">
+                4.5
+              </text>
+              <foreignObject x="265" y="60" width="60" height="30" id="input40">
+                <div xmlns="http://www.w3.org/1999/xhtml">
+                  <input type="text" className="letra" />
+                </div>
+              </foreignObject>
+
+              <g
+                id="tooth_4_4"
+                className="tooth-group"
+                data-name="4.4"
+                transform="translate(320,-105) scale(0.6)"
+              >
+                <use xlinkHref="#design4" />
+              </g>
+              <text x="375" y="50" className="tooth-name">
+                4.4
+              </text>
+              <foreignObject x="350" y="60" width="60" height="30" id="input41">
+                <div xmlns="http://www.w3.org/1999/xhtml">
+                  <input type="text" className="letra" />
+                </div>
+              </foreignObject>
+
+              <g
+                id="tooth_4_3"
+                className="tooth-group"
+                data-name="4.3"
+                transform="translate(400,-105) scale(0.6)"
+              >
+                <use xlinkHref="#design8" />
+              </g>
+              <text x="445" y="50" className="tooth-name">
+                4.3
+              </text>
+              <foreignObject x="430" y="60" width="60" height="30" id="input42">
+                <div xmlns="http://www.w3.org/1999/xhtml">
+                  <input type="text" className="letra" />
+                </div>
+              </foreignObject>
+
+              <g
+                id="tooth_4_2"
+                className="tooth-group"
+                data-name="4.2"
+                transform="translate(480,-105) scale(0.6)"
+              >
+                <use xlinkHref="#design8" />
+              </g>
+              <text x="525" y="50" className="tooth-name">
+                4.2
+              </text>
+              <foreignObject x="505" y="60" width="60" height="30" id="input43">
+                <div xmlns="http://www.w3.org/1999/xhtml">
+                  <input type="text" className="letra" />
+                </div>
+              </foreignObject>
+
+              <g
+                id="tooth_4_1"
+                className="tooth-group"
+                data-name="4.1"
+                transform="translate(560,-105) scale(0.6)"
+              >
+                <use xlinkHref="#design8" />
+              </g>
+              <text x="605" y="50" className="tooth-name">
+                4.1
+              </text>
+              <foreignObject x="580" y="60" width="60" height="30" id="input44">
+                <div xmlns="http://www.w3.org/1999/xhtml">
+                  <input type="text" className="letra" />
+                </div>
+              </foreignObject>
+
+              <g
+                id="tooth_3_1"
+                className="tooth-group"
+                data-name="3.1"
+                transform="translate(640,-105) scale(0.6)"
+              >
+                <use xlinkHref="#design8" />
+              </g>
+              <text x="685" y="50" className="tooth-name">
+                3.1
+              </text>
+              <foreignObject x="662" y="60" width="55" height="30" id="input45">
+                <div xmlns="http://www.w3.org/1999/xhtml">
+                  <input type="text" className="letra" />
+                </div>
+              </foreignObject>
+
+              <g
+                id="tooth_3_2"
+                className="tooth-group"
+                data-name="3.2"
+                transform="translate(720,-105) scale(0.6)"
+              >
+                <use xlinkHref="#design8" />
+              </g>
+              <text x="765" y="50" className="tooth-name">
+                3.2
+              </text>
+              <foreignObject x="740" y="60" width="60" height="30" id="input46">
+                <div xmlns="http://www.w3.org/1999/xhtml">
+                  <input type="text" className="letra" />
+                </div>
+              </foreignObject>
+
+              <g
+                id="tooth_3_3"
+                className="tooth-group"
+                data-name="3.3"
+                transform="translate(800,-105) scale(0.6)"
+              >
+                <use xlinkHref="#design8" />
+              </g>
+              <text x="845" y="50" className="tooth-name">
+                3.3
+              </text>
+              <foreignObject x="820" y="60" width="60" height="30" id="input47">
+                <div xmlns="http://www.w3.org/1999/xhtml">
+                  <input type="text" className="letra" />
+                </div>
+              </foreignObject>
+
+              <g
+                id="tooth_3_4"
+                className="tooth-group"
+                data-name="3.4"
+                transform="translate(880,-105) scale(0.6)"
+              >
+                <use xlinkHref="#design4" />
+              </g>
+              <text x="935" y="50" className="tooth-name">
+                3.4
+              </text>
+              <foreignObject x="910" y="60" width="60" height="30" id="input48">
+                <div xmlns="http://www.w3.org/1999/xhtml">
+                  <input type="text" className="letra" />
+                </div>
+              </foreignObject>
+
+              <g
+                id="tooth_3_5"
+                className="tooth-group"
+                data-name="3.5"
+                transform="translate(960,-105) scale(0.6)"
+              >
+                <use xlinkHref="#design4" />
+              </g>
+              <text x="1010" y="50" className="tooth-name">
+                3.5
+              </text>
+              <foreignObject x="990" y="60" width="60" height="30" id="input49">
+                <div xmlns="http://www.w3.org/1999/xhtml">
+                  <input type="text" className="letra" />
+                </div>
+              </foreignObject>
+
+              <g
+                id="tooth_3_6"
+                className="tooth-group"
+                data-name="3.6"
+                transform="translate(1040,-80) scale(0.6)"
+              >
+                <use xlinkHref="#design2" />
+              </g>
+              <text x="1095" y="50" className="tooth-name">
+                3.6
+              </text>
+              <foreignObject
+                x="1070"
+                y="60"
+                width="60"
+                height="30"
+                id="input50"
+              >
+                <div xmlns="http://www.w3.org/1999/xhtml">
+                  <input type="text" className="letra" />
+                </div>
+              </foreignObject>
+
+              <g
+                id="tooth_3_7"
+                className="tooth-group"
+                data-name="3.7"
+                transform="translate(1120,-80) scale(0.6)"
+              >
+                <use xlinkHref="#design2" />
+              </g>
+              <text x="1175" y="50" className="tooth-name">
+                3.7
+              </text>
+              <foreignObject
+                x="1150"
+                y="60"
+                width="60"
+                height="30"
+                id="input51"
+              >
+                <div xmlns="http://www.w3.org/1999/xhtml">
+                  <input type="text" className="letra" />
+                </div>
+              </foreignObject>
+
+              <g
+                id="tooth_3_8"
+                className="tooth-group"
+                data-name="3.8"
+                transform="translate(1200,-80) scale(0.6)"
+              >
+                <use xlinkHref="#design2" />
+              </g>
+              <text x="1255" y="50" className="tooth-name">
+                3.8
+              </text>
+              <foreignObject
+                x="1230"
+                y="60"
+                width="65"
+                height="30"
+                id="input52"
+              >
+                <div xmlns="http://www.w3.org/1999/xhtml">
+                  <input type="text" className="letra" />
+                </div>
+              </foreignObject>
+            </g>
+            <foreignObject x="50" y="900" width="1270" height="160">
+              <div xmlns="http://www.w3.org/1999/xhtml">
+                <label
+                  htmlFor="inputEspecificaciones"
+                  style={{ fontSize: '14px', fontWeight: 'bold' }}
+                >
+                  Especificaciones:
+                </label>
+
+                <textarea
+                  id="inputEspecificaciones"
+                  className="letra"
+                  rows="2"
+                  style={{ width: '100%', resize: 'none' }}
+                ></textarea>
+              </div>
+            </foreignObject>
+            <foreignObject x="50" y="1000" width="1270" height="60">
+              <div xmlns="http://www.w3.org/1999/xhtml">
+                <label
+                  htmlFor="inputObservaciones"
+                  style={{ fontSize: '14px', fontWeight: 'bold' }}
+                >
+                  Observaciones:
+                </label>
+
+                <textarea
+                  id="inputObservaciones"
+                  className="letra"
+                  rows="2"
+                  style={{ width: '100%', resize: 'none' }}
+                ></textarea>
+              </div>
+            </foreignObject>
+          </svg>
+        </div>
+
+        <OdontogramaToolsPanel
+          onSaveVersion={saveOdontogramaVersion}
+          onLoadVersion={loadHistory}
+        />
       </div>
 
-      <OdontogramaToolsPanel
-        onSaveVersion={saveOdontogramaVersion} // <--- Pasar la función de guardar
-        onLoadVersion={loadHistory} // <--- Pasar la función de cargar
-      />
-    </div>
+      {/* ── REGISTRO DE INTERVENCIONES EN BD (RF-06) ────────────────────────
+        Sección integrada desde OdontogramaPage.jsx.
+        Registra intervenciones clínicas estructuradas por diente en la BD
+        (complementa el odontograma SVG visual de arriba).
+    ────────────────────────────────────────────────────────────────────── */}
+      <div
+        style={{
+          background: 'white',
+          borderRadius: 8,
+          padding: 20,
+          marginTop: 16,
+          boxShadow: '0 1px 4px rgba(0,0,0,0.08)',
+        }}
+      >
+        {/* Cabecera de sección */}
+        <div
+          style={{
+            display: 'flex',
+            justifyContent: 'space-between',
+            alignItems: 'center',
+            marginBottom: 16,
+          }}
+        >
+          <div>
+            <h3
+              style={{
+                margin: 0,
+                fontSize: 16,
+                fontWeight: 700,
+                color: 'var(--color-primary)',
+              }}
+            >
+              Registro de Intervenciones
+            </h3>
+            <p style={{ margin: '2px 0 0', fontSize: 12, color: '#6b7280' }}>
+              Historial clínico por diente — guardado en la historia clínica
+            </p>
+          </div>
+          <button
+            onClick={() => setMostrarFormEntrada((s) => !s)}
+            style={{
+              background: mostrarFormEntrada
+                ? '#e5e7eb'
+                : 'var(--color-primary)',
+              color: mostrarFormEntrada ? '#374151' : 'white',
+              border: 'none',
+              borderRadius: 6,
+              padding: '7px 16px',
+              cursor: 'pointer',
+              fontSize: 13,
+              fontWeight: 600,
+            }}
+          >
+            {mostrarFormEntrada ? 'Cancelar' : '+ Nueva intervención'}
+          </button>
+        </div>
+
+        {/* Formulario de nueva entrada */}
+        {mostrarFormEntrada && (
+          <div
+            style={{
+              background: '#f9fafb',
+              border: '1px solid #e5e7eb',
+              borderRadius: 8,
+              padding: 16,
+              marginBottom: 16,
+            }}
+          >
+            <p
+              style={{
+                fontSize: 11,
+                fontWeight: 700,
+                color: 'var(--color-primary)',
+                textTransform: 'uppercase',
+                marginBottom: 12,
+              }}
+            >
+              Registrar intervención por diente
+            </p>
+
+            <div
+              style={{
+                display: 'grid',
+                gridTemplateColumns: 'repeat(3, 1fr)',
+                gap: 12,
+              }}
+            >
+              {/* Nº Diente */}
+              <div>
+                <label
+                  htmlFor="entrada-diente"
+                  style={{
+                    display: 'block',
+                    fontSize: 11,
+                    fontWeight: 600,
+                    color: '#6b7280',
+                    marginBottom: 4,
+                  }}
+                >
+                  Nº Diente (FDI) *
+                </label>
+                <input
+                  id="entrada-diente"
+                  type="number"
+                  min="11"
+                  max="85"
+                  value={formEntrada.numeroDiente}
+                  onChange={(e) =>
+                    setFormEntrada({
+                      ...formEntrada,
+                      numeroDiente: e.target.value,
+                    })
+                  }
+                  style={{
+                    width: '100%',
+                    border: '2px solid #e5e7eb',
+                    borderRadius: 6,
+                    padding: '6px 8px',
+                    fontSize: 13,
+                    outline: 'none',
+                    boxSizing: 'border-box',
+                  }}
+                />
+              </div>
+
+              {/* Superficie */}
+              <div>
+                <label
+                  htmlFor="entrada-superficie"
+                  style={{
+                    display: 'block',
+                    fontSize: 11,
+                    fontWeight: 600,
+                    color: '#6b7280',
+                    marginBottom: 4,
+                  }}
+                >
+                  Superficie
+                </label>
+                <select
+                  id="entrada-superficie"
+                  value={formEntrada.superficie}
+                  onChange={(e) =>
+                    setFormEntrada({
+                      ...formEntrada,
+                      superficie: e.target.value,
+                    })
+                  }
+                  style={{
+                    width: '100%',
+                    border: '2px solid #e5e7eb',
+                    borderRadius: 6,
+                    padding: '6px 8px',
+                    fontSize: 13,
+                    outline: 'none',
+                    boxSizing: 'border-box',
+                  }}
+                >
+                  <option value="">Todas</option>
+                  {SUPERFICIES.map((s) => (
+                    <option key={s} value={s}>
+                      {s}
+                    </option>
+                  ))}
+                </select>
+              </div>
+
+              {/* Fecha */}
+              <div>
+                <label
+                  htmlFor="entrada-fecha"
+                  style={{
+                    display: 'block',
+                    fontSize: 11,
+                    fontWeight: 600,
+                    color: '#6b7280',
+                    marginBottom: 4,
+                  }}
+                >
+                  Fecha
+                </label>
+                <input
+                  id="entrada-fecha"
+                  type="date"
+                  value={formEntrada.fecha}
+                  onChange={(e) =>
+                    setFormEntrada({ ...formEntrada, fecha: e.target.value })
+                  }
+                  style={{
+                    width: '100%',
+                    border: '2px solid #e5e7eb',
+                    borderRadius: 6,
+                    padding: '6px 8px',
+                    fontSize: 13,
+                    outline: 'none',
+                    boxSizing: 'border-box',
+                  }}
+                />
+              </div>
+
+              {/* Diagnóstico */}
+              <div style={{ gridColumn: 'span 2' }}>
+                <label
+                  htmlFor="entrada-diagnostico"
+                  style={{
+                    display: 'block',
+                    fontSize: 11,
+                    fontWeight: 600,
+                    color: '#6b7280',
+                    marginBottom: 4,
+                  }}
+                >
+                  Diagnóstico
+                </label>
+                <textarea
+                  id="entrada-diagnostico"
+                  value={formEntrada.diagnostico}
+                  onChange={(e) =>
+                    setFormEntrada({
+                      ...formEntrada,
+                      diagnostico: e.target.value,
+                    })
+                  }
+                  rows={2}
+                  style={{
+                    width: '100%',
+                    border: '2px solid #e5e7eb',
+                    borderRadius: 6,
+                    padding: '6px 8px',
+                    fontSize: 13,
+                    resize: 'none',
+                    outline: 'none',
+                    boxSizing: 'border-box',
+                  }}
+                />
+              </div>
+
+              {/* Tratamiento */}
+              <div>
+                <label
+                  htmlFor="entrada-tratamiento"
+                  style={{
+                    display: 'block',
+                    fontSize: 11,
+                    fontWeight: 600,
+                    color: '#6b7280',
+                    marginBottom: 4,
+                  }}
+                >
+                  Tratamiento
+                </label>
+                <textarea
+                  id="entrada-tratamiento"
+                  value={formEntrada.tratamiento}
+                  onChange={(e) =>
+                    setFormEntrada({
+                      ...formEntrada,
+                      tratamiento: e.target.value,
+                    })
+                  }
+                  rows={2}
+                  style={{
+                    width: '100%',
+                    border: '2px solid #e5e7eb',
+                    borderRadius: 6,
+                    padding: '6px 8px',
+                    fontSize: 13,
+                    resize: 'none',
+                    outline: 'none',
+                    boxSizing: 'border-box',
+                  }}
+                />
+              </div>
+
+              {/* Alumno tratante */}
+              <div style={{ gridColumn: 'span 3' }}>
+                <label
+                  htmlFor="entrada-alumno"
+                  style={{
+                    display: 'block',
+                    fontSize: 11,
+                    fontWeight: 600,
+                    color: '#6b7280',
+                    marginBottom: 4,
+                  }}
+                >
+                  Alumno tratante
+                </label>
+                <input
+                  id="entrada-alumno"
+                  type="text"
+                  value={formEntrada.alumno}
+                  onChange={(e) =>
+                    setFormEntrada({ ...formEntrada, alumno: e.target.value })
+                  }
+                  style={{
+                    width: '100%',
+                    border: '2px solid #e5e7eb',
+                    borderRadius: 6,
+                    padding: '6px 8px',
+                    fontSize: 13,
+                    outline: 'none',
+                    boxSizing: 'border-box',
+                  }}
+                />
+              </div>
+            </div>
+
+            {/* Botones del formulario */}
+            <div
+              style={{
+                display: 'flex',
+                justifyContent: 'flex-end',
+                gap: 8,
+                marginTop: 12,
+                paddingTop: 12,
+                borderTop: '1px solid #e5e7eb',
+              }}
+            >
+              <button
+                onClick={() => setMostrarFormEntrada(false)}
+                style={{
+                  background: '#f3f4f6',
+                  color: '#374151',
+                  border: 'none',
+                  borderRadius: 6,
+                  padding: '7px 16px',
+                  cursor: 'pointer',
+                  fontSize: 13,
+                  fontWeight: 600,
+                }}
+              >
+                Cancelar
+              </button>
+              <button
+                onClick={handleAgregarEntrada}
+                disabled={agregando}
+                style={{
+                  background: agregando ? '#93c5fd' : 'var(--color-primary)',
+                  color: 'white',
+                  border: 'none',
+                  borderRadius: 6,
+                  padding: '7px 16px',
+                  cursor: agregando ? 'not-allowed' : 'pointer',
+                  fontSize: 13,
+                  fontWeight: 600,
+                }}
+              >
+                {agregando ? 'Registrando...' : 'Registrar'}
+              </button>
+            </div>
+          </div>
+        )}
+
+        {/* Tabla de intervenciones */}
+        {cargandoEntradas ? (
+          <p style={{ textAlign: 'center', color: '#9ca3af', fontSize: 13 }}>
+            Cargando intervenciones...
+          </p>
+        ) : entradas.length === 0 ? (
+          <p
+            style={{
+              textAlign: 'center',
+              color: '#9ca3af',
+              fontSize: 13,
+              padding: '24px 0',
+            }}
+          >
+            Sin intervenciones registradas. Usa el botón &ldquo;Nueva
+            intervención&rdquo; para agregar.
+          </p>
+        ) : (
+          <div
+            style={{
+              overflowX: 'auto',
+              borderRadius: 8,
+              border: '1px solid #e5e7eb',
+            }}
+          >
+            <table
+              style={{
+                width: '100%',
+                borderCollapse: 'collapse',
+                fontSize: 13,
+              }}
+            >
+              <thead>
+                <tr style={{ background: '#f9fafb' }}>
+                  {[
+                    'Diente',
+                    'Superficie',
+                    'Diagnóstico',
+                    'Tratamiento',
+                    'Alumno',
+                    'Fecha',
+                    '',
+                  ].map((h) => (
+                    <th
+                      key={h}
+                      style={{
+                        padding: '8px 12px',
+                        textAlign: 'left',
+                        fontSize: 11,
+                        fontWeight: 700,
+                        textTransform: 'uppercase',
+                        color: '#6b7280',
+                        borderBottom: '1px solid #e5e7eb',
+                      }}
+                    >
+                      {h}
+                    </th>
+                  ))}
+                </tr>
+              </thead>
+              <tbody>
+                {entradas.map((entrada) => (
+                  <tr
+                    key={entrada.id_entrada}
+                    style={{ borderBottom: '1px solid #f3f4f6' }}
+                    onMouseEnter={(e) =>
+                      (e.currentTarget.style.background = '#eff6ff')
+                    }
+                    onMouseLeave={(e) =>
+                      (e.currentTarget.style.background = 'white')
+                    }
+                  >
+                    <td
+                      style={{
+                        padding: '8px 12px',
+                        fontWeight: 700,
+                        color: 'var(--color-primary)',
+                        textAlign: 'center',
+                      }}
+                    >
+                      {entrada.numero_diente}
+                    </td>
+                    <td
+                      style={{
+                        padding: '8px 12px',
+                        textTransform: 'capitalize',
+                        color: '#374151',
+                      }}
+                    >
+                      {entrada.superficie || '—'}
+                    </td>
+                    <td style={{ padding: '8px 12px', color: '#374151' }}>
+                      {entrada.diagnostico || '—'}
+                    </td>
+                    <td style={{ padding: '8px 12px', color: '#374151' }}>
+                      {entrada.tratamiento || '—'}
+                    </td>
+                    <td style={{ padding: '8px 12px', color: '#374151' }}>
+                      {entrada.alumno || '—'}
+                    </td>
+                    <td
+                      style={{
+                        padding: '8px 12px',
+                        color: '#9ca3af',
+                        fontSize: 12,
+                      }}
+                    >
+                      {formatFecha(entrada.fecha)}
+                    </td>
+                    <td style={{ padding: '8px 12px' }}>
+                      <button
+                        onClick={() =>
+                          eliminarEntrada(
+                            {
+                              idHistory: patientId,
+                              idEntrada: entrada.id_entrada,
+                            },
+                            {
+                              onSuccess: () =>
+                                toast.success('Entrada eliminada'),
+                              onError: () => toast.error('Error al eliminar'),
+                            }
+                          )
+                        }
+                        style={{
+                          background: 'none',
+                          border: 'none',
+                          color: '#ef4444',
+                          cursor: 'pointer',
+                          fontSize: 12,
+                          padding: 0,
+                        }}
+                      >
+                        Eliminar
+                      </button>
+                    </td>
+                  </tr>
+                ))}
+              </tbody>
+            </table>
+          </div>
+        )}
+      </div>
+    </>
   );
 }

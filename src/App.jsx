@@ -33,7 +33,9 @@ import Reportes from './pages/Admin/Reportes.jsx';
 import Equipos from './pages/Admin/Equipos.jsx';
 
 // ── Fase 2: Módulos clínicos ──────────────────────────────────────────────
-import OdontogramaPage from './pages/hc/Odontograma/OdontogramaPage.jsx';
+// OdontogramaPage consolidado dentro de odonto.jsx (RF-06, 2026-05-30)
+// Conservar el import comentado para restaurar si se necesita post-evaluación:
+// import OdontogramaPage from './pages/hc/Odontograma/OdontogramaPage.jsx';
 import Medicamentos from './pages/hc/Medicamentos/Medicamentos.jsx';
 import Adjuntos from './pages/hc/Adjuntos/Adjuntos.jsx';
 import FichaOperacion from './pages/hc/FichaOperacion/FichaOperacion.jsx';
@@ -47,6 +49,9 @@ import TransferirHC from './pages/Admin/TransferirHC.jsx';
 // ── Fase 4: Reportes / PDF ────────────────────────────────────────────────
 import HistorialVersiones from './pages/hc/HistorialVersiones/HistorialVersiones.jsx';
 import DashboardDocente from './pages/Docente/DashboardDocente.jsx';
+
+// ── RF-09: Consentimiento Informado ──────────────────────────────────────────
+import ConsentimientoInformado from './pages/hc/ConsentimientoInformado/ConsentimientoInformado.jsx';
 
 function App() {
   return (
@@ -142,10 +147,9 @@ function App() {
             <Route path="/historia/:id/evolucion" element={<Evolucion />} />
 
             {/* ── Fase 2: Módulos clínicos nuevos ── */}
-            <Route
-              path="/historia/:id/odontograma"
-              element={<OdontogramaPage />}
-            />
+            {/* Ruta /historia/:id/odontograma retirada del sidebar.
+                El odontograma se accede desde /historia/:id/examen-fisico/odonto
+                OdontogramaPage.jsx conservado en disco para post-evaluación. */}
             <Route
               path="/historia/:id/medicamentos"
               element={<Medicamentos />}
@@ -171,6 +175,12 @@ function App() {
             <Route
               path="/historia/:id/historial"
               element={<HistorialVersiones />}
+            />
+
+            {/* ── RF-09: Consentimiento Informado ── */}
+            <Route
+              path="/historia/:id/consentimiento"
+              element={<ConsentimientoInformado />}
             />
           </Route>
         </Route>

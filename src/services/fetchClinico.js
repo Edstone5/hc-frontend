@@ -237,3 +237,21 @@ export const registrarDevolucion = (id) =>
     method: 'PATCH',
     ...opts,
   }).then(handleResponse);
+
+// ── CONSENTIMIENTO INFORMADO (RF-09) ─────────────────────────────────────────
+export const fetchConsentimientos = (idHistoria) =>
+  fetch(`${API}/hc/${idHistoria}/consentimiento`, opts).then(handleResponse);
+
+export const addConsentimiento = ({ idHistory, data }) =>
+  fetch(`${API}/hc/${idHistory}/consentimiento`, {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify(data),
+    ...opts,
+  }).then(handleResponse);
+
+export const deleteConsentimiento = ({ idHistory, idConsentimiento }) =>
+  fetch(`${API}/hc/${idHistory}/consentimiento/${idConsentimiento}`, {
+    method: 'DELETE',
+    ...opts,
+  }).then(handleResponse);

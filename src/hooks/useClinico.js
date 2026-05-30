@@ -4,6 +4,9 @@
  */
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import {
+  fetchConsentimientos,
+  addConsentimiento,
+  deleteConsentimiento,
   fetchOdontograma,
   addOdontogramaEntrada,
   deleteOdontogramaEntrada,
@@ -41,6 +44,31 @@ import {
   registrarPrestamo,
   registrarDevolucion,
 } from '@services/fetchClinico.js';
+
+// ── Consentimiento Informado (RF-09) ─────────────────────────────────────────
+export const useConsentimientos = (id) =>
+  useQuery({
+    queryKey: ['consentimientos', id],
+    queryFn: () => fetchConsentimientos(id),
+    enabled: !!id,
+    refetchOnWindowFocus: false,
+  });
+export const useAddConsentimiento = () => {
+  const qc = useQueryClient();
+  return useMutation({
+    mutationFn: addConsentimiento,
+    onSuccess: (_, v) =>
+      qc.invalidateQueries({ queryKey: ['consentimientos', v.idHistory] }),
+  });
+};
+export const useDeleteConsentimiento = () => {
+  const qc = useQueryClient();
+  return useMutation({
+    mutationFn: deleteConsentimiento,
+    onSuccess: (_, v) =>
+      qc.invalidateQueries({ queryKey: ['consentimientos', v.idHistory] }),
+  });
+};
 
 // ── Odontograma ──────────────────────────────────────────────────────────────
 export const useOdontograma = (id) =>

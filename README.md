@@ -1,200 +1,339 @@
-# 📌 Proyecto Frontend – Sistema de Gestión de Historias Clínicas
+# HC Frontend — Sistema de Historia Clínica Digital UNJBG
 
-Este repositorio contiene el frontend del sistema de gestión de historias clínicas.  
-Está construido con **React + Vite + JavaScript**
+[![Build](https://img.shields.io/badge/build-passing-brightgreen)](#)
+[![React](https://img.shields.io/badge/React-18-blue)](https://react.dev)
+[![Vite](https://img.shields.io/badge/Vite-5-purple)](https://vitejs.dev)
 
-## ppp
+Frontend SPA del sistema de historia clínica digital para la **Clínica Odontológica Basadrina** de la Universidad Nacional Jorge Basadre Grohmann, Tacna, Perú.
 
-## 🚀 Requisitos previos
-
-Antes de comenzar, asegúrate de tener instalado:
-
-- Node.js versión 22.19.0 o superior
-- npm versión 9 o superior (incluido con Node.js)
-- Git
+**v2.2.0** — React 18 + Vite 5 + TanStack Query + Tailwind CSS
 
 ---
 
-## 📂 Estructura del proyecto
+## Características principales
 
-### 📁 Descripción de carpetas y archivos
-
-- **public/**  
-  Contiene archivos estáticos que no pasan por el proceso de compilación de Vite.  
-  Ejemplos: favicon, íconos, `manifest.json` (para PWA).
-
-- **src/**  
-  Carpeta principal del código fuente de la aplicación.
-  - **assets/**  
-    Archivos estáticos internos.  
-    Ejemplo: imágenes, fuentes, estilos globales.
-
-  - **components/**  
-    Componentes reutilizables de la aplicación.  
-    Ejemplo: botones, tablas, formularios, modales.
-
-  - **pages/**  
-    Vistas principales de la aplicación. Cada página suele estar asociada a una ruta.  
-    Ejemplo: `Login.jsx`, `Dashboard.jsx`, `HistoriaClinica.jsx`.
-
-  - **layouts/**  
-    Plantillas que definen la estructura general de las páginas.  
-    Ejemplo: layout con menú lateral, layout público, layout para el dashboard.
-
-  - **hooks/**  
-    Custom hooks de React para encapsular lógica reutilizable.  
-    Ejemplo: `useAuth`, `useFetch`, `useForm`.
-
-  - **services/**  
-    Lógica para conectarse al backend (API). Aquí se manejan las peticiones con fetch o axios.  
-    Ejemplo: `authService.js`, `pacienteService.js`.
-
-  - **utils/**  
-    Funciones auxiliares que se pueden usar en todo el proyecto.  
-    Ejemplo: formatear fechas, validaciones.
-
-  - **App.jsx**  
-    Componente principal de la aplicación. Define las rutas y layouts.
-
-  - **main.jsx**  
-    Punto de entrada de la aplicación. Aquí se monta React en el DOM y se configuran providers globales (ejemplo: React Router, Contexts).
-
-- **.gitignore**  
-  Define qué archivos y carpetas no deben subirse al repositorio (ejemplo: `node_modules`, `.env`).
-
-- **index.html**  
-  Archivo HTML principal donde se inyecta la aplicación React.
-
-- **package.json**  
-  Define el nombre del proyecto, dependencias, scripts y configuración básica.
-
-- **package-lock.json**  
-  Guarda las versiones exactas de las dependencias instaladas para asegurar que todo el equipo use las mismas.
-
-- **vite.config.js**  
-  Configuración de Vite (alias, plugins, optimización).
+| Área                | Detalle                                                                   |
+| ------------------- | ------------------------------------------------------------------------- |
+| **Framework**       | React 18 + Vite 5 (ESM, HMR)                                              |
+| **Routing**         | React Router v7                                                           |
+| **Estado servidor** | TanStack Query (React Query) v5                                           |
+| **Estilos**         | Tailwind CSS v4 + CSS custom properties                                   |
+| **Formularios**     | Estado local controlado (sin librerías externas)                          |
+| **PDF**             | jsPDF + html2canvas (client-side) + `window.print()` para consentimientos |
+| **Notificaciones**  | react-hot-toast                                                           |
+| **Iconos**          | lucide-react                                                              |
+| **Lint**            | ESLint + prettier (hook pre-commit)                                       |
 
 ---
 
-## ⚡ Instalación y uso
+## Inicio rápido
 
-1. **Clonar el repositorio**  
-   `git clone <url-del-repo>`  
-   `cd hc-frontend`
+```bash
+# Instalar dependencias
+npm install
 
-2. **Instalar dependencias**  
-   `npm install`
+# Crear archivo de variables de entorno
+cp .env.example .env
+# Editar .env: VITE_API_URL=http://localhost:3000/api
 
-3. **Iniciar en local**
-   `npm run dev`
+# Servidor de desarrollo (HMR activo)
+npm run dev
 
----
+# Build de producción
+npm run build
 
-## 🛠️ Scripts disponibles
+# Previsualizar build
+npm run preview
+```
 
-Ejecutar en el directorio del proyecto:
-
-- `npm install` → Instala dependencias
-- `npm run dev` → Inicia el servidor de desarrollo
-- `npm run build` → Genera la versión optimizada para producción
-- `npm run preview` → Previsualiza el build de producción
-
----
-
-## 🏗️ Flujo de Trabajo con Git
-
-El flujo de trabajo del proyecto se basa en el uso de ramas para cada nueva tarea, ya sea una funcionalidad, un componente o un arreglo. Esto nos permite trabajar de forma paralela sin interferir en el trabajo de los demás.
-
-**Pasos:**
-
-1.  **Crear una nueva rama**: Antes de empezar a trabajar en una tarea, crea una rama específica desde la rama principal (`main` o `develop`).
-
-    ```bash
-    git checkout -b nombre-de-la-rama
-    ```
-
-2.  **Realizar commits**: A medida que trabajas, haz `commits` en esta nueva rama para guardar tus cambios. Utiliza mensajes de `commit` descriptivos.
-
-    ```bash
-    git commit -m "add new user"
-    ```
-
-3.  **Subir la rama**: Una vez que hayas terminado la tarea, sube tu rama al repositorio remoto para que otros la puedan ver y revisar.
-    ```bash
-    git push origin nombre-de-la-rama
-    ```
+La aplicación queda disponible en `http://localhost:5173`.
 
 ---
 
-## 🏷️ Convención de Nombres para Ramas
+## Variables de entorno
 
-Para mantener la coherencia y la claridad, usaremos una convención de nombres para las ramas. El formato es `<tipo>/<descripcion-de-la-tarea>`.
-
-**Tipos de ramas comunes:**
-
-- `feat`: Para una **nueva funcionalidad** o característica.
-  - **Ejemplo:** `feat/add-contact-form`
-- `fix`: Para una **corrección de errores** (bug fix).
-  - **Ejemplo:** `fix/correct-email-validation`
-- `docs`: Para cambios en la **documentación**.
-  - **Ejemplo:** `docs/update-readme`
-- `refactor`: Para **refactorización** de código que no cambia la funcionalidad.
-  - **Ejemplo:** `refactor/improve-button-structure`
-- `chore`: Para tareas de **mantenimiento** o configuración del proyecto.
-  - **Ejemplo:** `chore/update-dependencies`
-- `test`: Para añadir o modificar **pruebas**.
-  - **Ejemplo:** `test/add-login-unit-tests`
-
-**Consideraciones adicionales:**
-
-- **Minúsculas**: Usa solo letras minúsculas.
-- **Guiones**: Separa las palabras con guiones (`-`).
-- **Sé descriptivo**: La descripción debe ser lo suficientemente clara para que, con solo leer el nombre de la rama, se entienda de qué trata la tarea.
+| Variable       | Descripción               | Ejemplo                     |
+| -------------- | ------------------------- | --------------------------- |
+| `VITE_API_URL` | URL base del backend REST | `http://localhost:3000/api` |
 
 ---
 
-## 📖 Convenciones
+## Estructura del proyecto
 
-### **📋 Convenciones de Nomenclatura para Front-end**
-
-Para mantener un código limpio y consistente, seguiremos las siguientes convenciones de nomenclatura para el desarrollo del front-end.
-
-#### **1. Nomenclatura en JavaScript**
-
-- **Variables**: Las variables se declararán utilizando **camelCase**.
-  - **Ejemplo**: `vaquitaMarina`
-- **Clases**: Los nombres de las clases se escribirán en **PascalCase**.
-  - **Ejemplo**: `UserModel`
+```
+hc-frontend/
+├── public/
+│   └── visorOdonto.js          # Script del odontograma SVG (cargado dinámicamente)
+├── src/
+│   ├── App.jsx                 # Router principal — define todas las rutas
+│   ├── main.jsx                # Entry point — monta React + QueryClient + Router
+│   │
+│   ├── components/
+│   │   ├── layout/
+│   │   │   ├── Header.jsx      # Barra superior global
+│   │   │   └── Sidebar.jsx     # Menú lateral genérico
+│   │   ├── Notificaciones/
+│   │   │   └── NotificacionBell.jsx  # Campana de notificaciones
+│   │   ├── PdfExport/
+│   │   │   └── ExportarPDF.jsx # Exportación PDF (jsPDF + html2canvas) — RF-08 ✅
+│   │   ├── routes/
+│   │   │   ├── ProtectedRoutes.jsx
+│   │   │   └── PublicRoute.jsx
+│   │   └── ui/                 # Componentes atómicos: Button, Card, Tab, etc.
+│   │
+│   ├── features/               # Componentes de dominio reutilizables
+│   │   ├── patient/PatientCard.jsx
+│   │   └── student/
+│   │
+│   ├── hooks/                  # Custom hooks (TanStack Query wrappers)
+│   │   ├── useAuth.js          # useCurrentUser, useLogin
+│   │   ├── useClinico.js       # Hooks para todos los módulos clínicos
+│   │   ├── useHC.js            # Hooks de historia clínica
+│   │   ├── useHistoria.js
+│   │   └── ...
+│   │
+│   ├── layouts/                # Plantillas de página
+│   │   ├── AdminLayout.jsx     # Panel administrador
+│   │   ├── AuthLayout.jsx      # Páginas de autenticación
+│   │   ├── HcLayout.jsx        # Historia clínica (sidebar + header paciente)
+│   │   └── StudentLayout.jsx   # Dashboard estudiante/docente
+│   │
+│   ├── pages/
+│   │   ├── Admin/              # Panel admin: dashboard, búsqueda, reportes, equipos
+│   │   ├── Dashboard/          # Dashboard principal
+│   │   ├── Docente/            # Dashboard docente
+│   │   ├── Login/
+│   │   ├── Student/
+│   │   └── hc/                 # Módulos de la historia clínica
+│   │       ├── Adjuntos/
+│   │       ├── Anamnesis/
+│   │       │   ├── Antecedente/
+│   │       │   ├── Enfermedad_Actual/
+│   │       │   ├── Filiacion/
+│   │       │   └── Motivo_Consulta/
+│   │       ├── Citas/
+│   │       ├── ConsentimientoInformado/   # RF-09 ✅ (nuevo en v2.2.0)
+│   │       │   ├── ConsentimientoInformado.jsx
+│   │       │   └── consentimientoTemplates.js
+│   │       ├── Diagnostico/
+│   │       ├── Evolucion/
+│   │       ├── ExamenFisico/
+│   │       │   ├── ExamenFisicoMenu.jsx
+│   │       │   ├── ExamenGeneral.jsx
+│   │       │   ├── ExamenRegional.jsx
+│   │       │   ├── ExamenBoca.jsx
+│   │       │   ├── ExamenHigiene.jsx
+│   │       │   ├── odonto.jsx      # Odontograma SVG + Registro de intervenciones (RF-06) ✅
+│   │       │   └── odotools.jsx    # Panel de herramientas del odontograma
+│   │       ├── FichaEvaluacion/
+│   │       ├── FichaOperacion/
+│   │       ├── HistorialVersiones/
+│   │       ├── Medicamentos/
+│   │       ├── Odontograma/
+│   │       │   └── OdontogramaPage.jsx  # Conservado, desactivado temporalmente (ver ADR-0008)
+│   │       └── ValidacionDocente/
+│   │
+│   ├── services/               # Fetch functions (capa de acceso a la API)
+│   │   ├── fetchClinico.js     # Todos los módulos clínicos
+│   │   ├── fetchHC.js
+│   │   ├── fetchLogin.js
+│   │   └── ...
+│   │
+│   └── stores/                 # Estado local global (Zustand / contexto simple)
+│       ├── historiaStore.js
+│       ├── useForm.js
+│       └── usePatientStore.js
+│
+├── index.html
+├── vite.config.js              # Alias @ui, @hooks, @services, @stores, @cmlayout
+├── tailwind.config.js
+└── package.json
+```
 
 ---
 
-#### **2. Componentes de React**
+## Rutas de la aplicación
 
-- Los nombres de los archivos y componentes de React se escribirán en **PascalCase**.
-  - **Ejemplo**: `Button.jsx`
-  - **Ejemplo**: `HomePage.jsx`
+### Públicas
+
+| Ruta     | Componente  | Descripción      |
+| -------- | ----------- | ---------------- |
+| `/login` | `Login.jsx` | Inicio de sesión |
+
+### Panel Administrador (`/admin/*`)
+
+| Ruta                    | Componente              | RF          |
+| ----------------------- | ----------------------- | ----------- |
+| `/admin`                | `AdminDashboard.jsx`    | RF-ADM-03   |
+| `/admin/create-student` | `CreateStudent.jsx`     | RF-ADM-05   |
+| `/admin/student/:id`    | `StudentDetailPage.jsx` | RF-ADM-04   |
+| `/admin/busqueda`       | `Busqueda.jsx`          | RF-03       |
+| `/admin/reportes`       | `Reportes.jsx`          | RF-12       |
+| `/admin/equipos`        | `Equipos.jsx`           | RF-15       |
+| `/admin/transferir/:id` | `TransferirHC.jsx`      | RF-03/RF-10 |
+
+### Historia Clínica (`/historia/:id/*`)
+
+| Ruta                                           | Componente                    | RF           |
+| ---------------------------------------------- | ----------------------------- | ------------ |
+| `/historia/:id/anamnesis`                      | `Anamnesis.jsx`               | RF-01        |
+| `/historia/:id/anamnesis/filiacion`            | `Filiacion.jsx`               | RF-02        |
+| `/historia/:id/anamnesis/motivo-consulta`      | `Motivo_Consulta.jsx`         | RF-02        |
+| `/historia/:id/anamnesis/enfermedad-actual`    | `Enfermedad_Actual.jsx`       | RF-02        |
+| `/historia/:id/anamnesis/antecedente-personal` | `Antecedente.jsx`             | RF-02        |
+| `/historia/:id/examen-fisico`                  | `ExamenFisicoMenu.jsx`        | RF-01        |
+| `/historia/:id/examen-fisico/general`          | `ExamenGeneral.jsx`           | RF-02        |
+| `/historia/:id/examen-fisico/regional`         | `ExamenRegional.jsx`          | RF-02        |
+| `/historia/:id/examen-fisico/boca`             | `ExamenBoca.jsx`              | RF-02        |
+| `/historia/:id/examen-fisico/higiene`          | `ExamenHigiene.jsx`           | RF-02        |
+| `/historia/:id/examen-fisico/odonto`           | `odonto.jsx`                  | **RF-06 ✅** |
+| `/historia/:id/diagnostico-presuntivo`         | `DiagnosticoPresuntivo.jsx`   | RF-02        |
+| `/historia/:id/derivacion-clinicas`            | `DerivacionClinicas.jsx`      | RF-02        |
+| `/historia/:id/diagnostico-clinicas`           | `DiagnosticoClinicas.jsx`     | RF-02        |
+| `/historia/:id/evolucion`                      | `Evolucion.jsx`               | RF-02        |
+| `/historia/:id/odontograma`                    | _(desactivada, ver ADR-0008)_ | RF-06        |
+| `/historia/:id/medicamentos`                   | `Medicamentos.jsx`            | **RF-07 ✅** |
+| `/historia/:id/fichas-operacion`               | `FichaOperacion.jsx`          | **RF-18 ✅** |
+| `/historia/:id/fichas-evaluacion`              | `FichaEvaluacion.jsx`         | RF-13/RF-14  |
+| `/historia/:id/citas`                          | `Citas.jsx`                   | **RF-11 ✅** |
+| `/historia/:id/adjuntos`                       | `Adjuntos.jsx`                | **RF-05 ✅** |
+| `/historia/:id/validacion`                     | `ValidacionDocente.jsx`       | RF-04/RF-14  |
+| `/historia/:id/historial`                      | `HistorialVersiones.jsx`      | RF-02        |
+| `/historia/:id/consentimiento`                 | `ConsentimientoInformado.jsx` | **RF-09 ✅** |
 
 ---
 
-#### **3. Clases de CSS**
+## Módulo ExportarPDF (RF-08)
 
-- Las clases de CSS se nombrarán utilizando la metodología **BEM (Bloque, Elemento, Modificador)**.
-  - **Bloque**: Representa un componente independiente.
-    - **Ejemplo**: `.componente`
-  - **Elemento**: Una parte del bloque.
-    - **Ejemplo**: `.componente__parte`
-  - **Modificador**: Una bandera para un bloque o elemento que cambia su apariencia o comportamiento.
-    - **Ejemplo**: `.componente--variación`
+El componente `ExportarPDF.jsx` genera PDFs client-side capturando el DOM.
+
+### Props
+
+| Prop            | Tipo     | Requerido | Descripción                                           |
+| --------------- | -------- | --------- | ----------------------------------------------------- |
+| `targetId`      | `string` | ✅        | ID del elemento DOM a capturar                        |
+| `nombreArchivo` | `string` | —         | Nombre base del archivo `.pdf`                        |
+| `titulo`        | `string` | —         | Título que aparece en el header del PDF               |
+| `idHistoria`    | `string` | —         | UUID de la HC (para auditoría)                        |
+| `usuario`       | `string` | —         | Nombre del usuario autenticado (aparece en el header) |
+
+### Uso
+
+```jsx
+import ExportarPDF from '@components/PdfExport/ExportarPDF';
+import { useCurrentUser } from '@hooks/useAuth';
+
+const { data: user } = useCurrentUser();
+
+<div id="contenido-para-pdf">
+  {/* contenido clínico */}
+</div>
+
+<ExportarPDF
+  targetId="contenido-para-pdf"
+  nombreArchivo="diagnostico-presuntivo"
+  titulo="Diagnóstico Presuntivo"
+  idHistoria={id}
+  usuario={`${user?.nombre} ${user?.apellido}`}
+/>
+```
+
+### Características del PDF generado (v2.2.0)
+
+- Header institucional con nombre de usuario y timestamp
+- Footer con "Pág. X de N" en cada hoja
+- Botones de UI excluidos del capture (`data-pdf-hidden="true"`)
+- Exportación registrada en auditoría del backend
 
 ---
 
-#### **4. Convención de Idioma**
+## Módulo Consentimiento Informado (RF-09)
 
-- Todos los nombres de variables y clases se escribirán en **inglés** para mantener una convención global y evitar ambigüedades.
-  - **Ejemplo**: Usa `userModel` en lugar de `modeloDeUsuario`.
+**Ruta:** `/historia/:id/consentimiento`
+
+### Tipos de template disponibles
+
+| Valor             | Descripción                        |
+| ----------------- | ---------------------------------- |
+| `adulto_general`  | Procedimientos generales en adulto |
+| `cirugia_oral`    | Exodoncias y cirugías menores      |
+| `menor_de_edad`   | Paciente menor — requiere tutor    |
+| `anestesia_local` | Anestesia local                    |
+
+### Flujo
+
+1. Seleccionar tipo de consentimiento
+2. Completar nombre del paciente (y tutor si es menor)
+3. **Vista previa** del documento de texto
+4. **Imprimir / PDF** usando `window.print()` con `@media print` dedicado
+5. **Guardar registro** en la BD (historial de consentimientos de la HC)
 
 ---
 
-## Notas
+## Odontograma (RF-06)
 
-- El repo tiene autoformteo y linteo ya configurado, se activa al momento de hacer algun commit
+**Acceso:** Examen Físico → Odontograma (`/historia/:id/examen-fisico/odonto`)
+
+La vista contiene dos secciones complementarias:
+
+1. **SVG interactivo** con 24 herramientas de anotación clínica
+   - Coronas (CM, CF, CMC, CV, CLM, CT)
+   - Defectos de esmalte, edéntulo, diastema, implantes
+   - Aparatos ortodónticos fijos y removibles
+   - Guarda versiones en localStorage por paciente
+
+2. **Registro de intervenciones** (integrado desde `OdontogramaPage.jsx` en v2.2.0)
+   - Formulario por diente: número FDI, superficie, diagnóstico, tratamiento, alumno, fecha
+   - Tabla de historial persistida en la base de datos
+   - Ver ADR-0008 para justificación de la consolidación
+
+---
+
+## Convenciones del proyecto
+
+### Nomenclatura
+
+- **Componentes React**: PascalCase (`PatientCard.jsx`)
+- **Custom hooks**: camelCase con prefijo `use` (`useCurrentUser`)
+- **Servicios fetch**: camelCase con prefijo `fetch` (`fetchConsentimientos`)
+- **Páginas**: PascalCase en carpeta con el nombre del módulo
+
+### Alias de Vite
+
+| Alias       | Ruta real               |
+| ----------- | ----------------------- |
+| `@ui`       | `src/components/ui`     |
+| `@hooks`    | `src/hooks`             |
+| `@services` | `src/services`          |
+| `@stores`   | `src/stores`            |
+| `@cmlayout` | `src/components/layout` |
+
+### Convención de ramas y commits
+
+Ver [`../hc-backend/docs/GIT_FLOW.md`](../hc-backend/docs/GIT_FLOW.md) —
+el flujo de trabajo es compartido con el backend.
+
+---
+
+## Historial de versiones del frontend
+
+| Versión | Fecha      | Cambios principales                                                                                                                    |
+| ------- | ---------- | -------------------------------------------------------------------------------------------------------------------------------------- |
+| v2.2.0  | 2026-05-30 | RF-09: Consentimiento Informado completo. RF-08: ExportarPDF con usuario + auditoría. RF-06: Odontograma consolidado en Examen Físico. |
+| v2.1.0  | 2026-05    | Dashboard docente, fichas de evaluación, citas, validación docente.                                                                    |
+| v2.0.0  | 2026-05    | MVP: HC completa, examen físico, odontograma SVG, adjuntos, medicamentos.                                                              |
+
+---
+
+## Scripts disponibles
+
+```bash
+npm run dev       # Servidor de desarrollo (localhost:5173)
+npm run build     # Build optimizado en dist/
+npm run preview   # Previsualizar dist/ en localhost:4173
+npm run lint      # ESLint sobre src/
+```
+
+---
+
+_Proyecto académico — Ingeniería de Software II 2026-I, UNJBG. Grupo 4._

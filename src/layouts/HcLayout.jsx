@@ -19,7 +19,8 @@ function HcLayout() {
   const menuItems = [
     { path: `/historia/${id}/anamnesis`, label: 'Anamnesis' },
     { path: `/historia/${id}/examen-fisico`, label: 'Examen Físico' },
-    { path: `/historia/${id}/odontograma`, label: 'Odontograma' },
+    // El Odontograma se accede desde Examen Físico → Odontograma (odonto.jsx)
+    // El link independiente fue consolidado en ese módulo (RF-06, 2026-05-30)
     {
       path: `/historia/${id}/diagnostico-presuntivo`,
       label: 'Diagnósticos presuntivos',
@@ -40,6 +41,10 @@ function HcLayout() {
     { path: `/historia/${id}/adjuntos`, label: 'Adjuntos' },
     { path: `/historia/${id}/validacion`, label: 'Validación docente' },
     { path: `/historia/${id}/historial`, label: 'Historial de versiones' },
+    {
+      path: `/historia/${id}/consentimiento`,
+      label: 'Consentimiento informado',
+    },
   ];
 
   return (
