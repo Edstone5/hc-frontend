@@ -15,6 +15,7 @@ import React, { useEffect, useState, useCallback } from 'react';
 import { useParams } from 'react-router';
 import toast from 'react-hot-toast';
 import OdontogramaToolsPanel from './odotools';
+import { HALLAZGOS_ODONTO, HALLAZGO_LABEL } from './hallazgosOdonto';
 import {
   useOdontograma,
   useAddOdontogramaEntrada,
@@ -35,6 +36,7 @@ const TIPO_EVOLUCION = 'EVOLUCION';
 const FORM_INICIAL = {
   numeroDiente: '',
   superficie: '',
+  codigoHallazgo: '',
   diagnostico: '',
   tratamiento: '',
   fecha: new Date().toISOString().split('T')[0],
@@ -2258,6 +2260,55 @@ export default function Odontograma() {
                 </select>
               </div>
 
+              {/* Hallazgo (catálogo NTS N° 150) */}
+              <div>
+                <label
+                  htmlFor="entrada-hallazgo"
+                  style={{
+                    display: 'block',
+                    fontSize: 11,
+                    fontWeight: 600,
+                    color: '#6b7280',
+                    marginBottom: 4,
+                  }}
+                >
+                  Hallazgo (NTS N° 150)
+                </label>
+                <select
+                  id="entrada-hallazgo"
+                  value={formEntrada.codigoHallazgo}
+                  onChange={(e) => {
+                    const codigo = e.target.value;
+                    const item = HALLAZGOS_ODONTO.find(
+                      (h) => h.codigo === codigo
+                    );
+                    setFormEntrada((prev) => ({
+                      ...prev,
+                      codigoHallazgo: codigo,
+                      // Autocompleta el diagnóstico si está vacío (editable).
+                      diagnostico:
+                        prev.diagnostico || (item ? item.descripcion : ''),
+                    }));
+                  }}
+                  style={{
+                    width: '100%',
+                    border: '2px solid #e5e7eb',
+                    borderRadius: 6,
+                    padding: '6px 8px',
+                    fontSize: 13,
+                    outline: 'none',
+                    boxSizing: 'border-box',
+                  }}
+                >
+                  <option value="">— Seleccionar —</option>
+                  {HALLAZGOS_ODONTO.map((h) => (
+                    <option key={h.codigo} value={h.codigo}>
+                      {h.codigo} — {h.descripcion}
+                    </option>
+                  ))}
+                </select>
+              </div>
+
               {/* Fecha */}
               <div>
                 <label
@@ -2482,6 +2533,7 @@ export default function Odontograma() {
                   {[
                     'Diente',
                     'Superficie',
+                    'Hallazgo',
                     'Diagnóstico',
                     'Tratamiento',
                     'Alumno',
@@ -2536,6 +2588,24 @@ export default function Odontograma() {
                       }}
                     >
                       {entrada.superficie || '—'}
+                    </td>
+                    <td style={{ padding: '8px 12px', color: '#374151' }}>
+                      {entrada.codigo_hallazgo ? (
+                        <span
+                          title={
+                            HALLAZGO_LABEL[entrada.codigo_hallazgo] ||
+                            entrada.codigo_hallazgo
+                          }
+                          style={{
+                            fontWeight: 700,
+                            color: 'var(--color-primary)',
+                          }}
+                        >
+                          {entrada.codigo_hallazgo}
+                        </span>
+                      ) : (
+                        '—'
+                      )}
                     </td>
                     <td style={{ padding: '8px 12px', color: '#374151' }}>
                       {entrada.diagnostico || '—'}
