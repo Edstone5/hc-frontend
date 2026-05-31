@@ -272,6 +272,15 @@ const { data: user } = useCurrentUser();
 
 ## Odontograma (RF-06)
 
+> **Actualización 2026-05-31 (ADR-0023):** corregida la ubicación de las
+> anotaciones de **Fusión** y **Germinación** (sección "Anomalías
+> morfológicas" del panel). Calculaban la posición con `getCTM()` (píxeles
+> CSS, ~0..320) mientras el overlay dibuja en unidades viewBox (0..1400), por
+> lo que el círculo/elipse caía escalado sobre otro diente — mismo problema de
+> espacio de coordenadas que el bug 7.3→3.8 (ADR-0018). Ahora usan
+> `centerOfTooth`/`getToothBBox` (vía `getElementToSvgMatrix`), igual que el
+> resto de herramientas del odontograma.
+
 **Acceso:** Examen Físico → Odontograma (`/historia/:id/examen-fisico/odonto`)
 
 La vista contiene dos secciones complementarias:

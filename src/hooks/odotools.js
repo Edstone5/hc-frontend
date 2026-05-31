@@ -1541,67 +1541,20 @@ export function addGerminacion(toothDataName, color = 'blue') {
       return false;
     }
 
-    const offsetX = 8;
-    const offsetY = -2;
-
     const name = toothDataName.trim();
 
-    // 1) intentar encontrar el <text class="tooth-name"> con el contenido exacto
-    const texts = Array.from(svg.querySelectorAll('text.tooth-name'));
-    let textEl =
-      texts.find((t) => (t.textContent || '').trim() === name) || null;
-
-    // 2) intentar encontrar el <g.tooth-group data-name="..."> (por si no hay <text>)
-    const toothGroup = svg.querySelector(`g.tooth-group[data-name="${name}"]`);
-
-    // función auxiliar: transformar un punto (x,y) del elemento a coordenadas del SVG
-    const toSvgPoint = (el, x, y) => {
-      const pt = svg.createSVGPoint();
-      pt.x = Number(x);
-      pt.y = Number(y);
-      // si el elemento tiene transformaciones locales, getCTM() las incluye
-      const ctm = el.getCTM ? el.getCTM() : null;
-      if (ctm) {
-        return pt.matrixTransform(ctm);
-      }
-      // fallback: devolver mismo punto
-      return pt;
-    };
-
-    let centerSvgPoint = null;
-
-    if (textEl) {
-      // obtener x,y del atributo (pueden ser múltiples valores; usamos el primero)
-      const xAttr = textEl.getAttribute('x');
-      const yAttr = textEl.getAttribute('y');
-
-      if (xAttr != null && yAttr != null) {
-        // manejar casos "x" puede ser "365" o "365 370" -> tomar el primero
-        const x = parseFloat(String(xAttr).trim().split(/\s+/)[0]);
-        const y = parseFloat(String(yAttr).trim().split(/\s+/)[0]);
-        centerSvgPoint = toSvgPoint(textEl, x, y);
-      } else {
-        // si no tiene atributos, usar su bbox centro (transformado)
-        const bbox = textEl.getBBox();
-        const cx = bbox.x + bbox.width / 2;
-        const cy = bbox.y + bbox.height / 2;
-        centerSvgPoint = toSvgPoint(textEl, cx, cy);
-      }
-    } else if (toothGroup) {
-      // usar centro del bbox del grupo transformado
-      const bbox = toothGroup.getBBox();
-      const cx = bbox.x + bbox.width / 2;
-      const cy = bbox.y + bbox.height / 2;
-      centerSvgPoint = toSvgPoint(toothGroup, cx, cy);
-    } else {
+    // Posición y tamaño en coordenadas viewBox (el overlay dibuja en ese mismo
+    // espacio). Antes se usaba getCTM(), que devuelve PÍXELES CSS (0..~320),
+    // mientras el overlay usa unidades viewBox (0..1400): el círculo caía
+    // escalado a ~1/4.375 y aparecía sobre otro diente (mismo bug que 7.3→3.8).
+    // centerOfTooth/getToothBBox usan getElementToSvgMatrix (getScreenCTM
+    // compuesto con el inverso del SVG) → unidades viewBox correctas. Es el
+    // mismo helper probado que ya usa addGiroversion.
+    const center = centerOfTooth(svg, name);
+    if (!center) {
       console.warn(
-        `addGerminacion: no se encontró text ni tooth-group para "${name}"`
+        `addGerminacion: no se encontró el diente "${name}" en el SVG`
       );
-      return false;
-    }
-
-    if (!centerSvgPoint) {
-      console.warn('addGerminacion: no se pudo calcular la posición global');
       return false;
     }
 
@@ -1609,38 +1562,17 @@ export function addGerminacion(toothDataName, color = 'blue') {
     const existing = overlay.querySelectorAll(`[data-id^="germin-${name}-"]`);
     existing.forEach((e) => e.remove());
 
-    // Calcular radio: proporcional al tamaño del diente si existe bbox, sino valor por defecto
-    let r = 20;
-    try {
-      if (toothGroup) {
-        const tb = toothGroup.getBBox();
-        const minSide = Math.min(tb.width, tb.height) || 20;
-        // ajustar por el scale que aplica el grupo: intentamos inferir escala a partir de getCTM()
-        const groupCTM = toothGroup.getCTM ? toothGroup.getCTM() : null;
-        let scaleApprox = 1;
-        if (groupCTM) {
-          // aproximar escala por la magnitud de a (m11) y d (m22)
-          scaleApprox = (Math.abs(groupCTM.a) + Math.abs(groupCTM.d)) / 2 || 1;
-        }
-        r = Math.max(5, Math.min(20, Math.floor(minSide * 0.2 * scaleApprox)));
-      } else if (textEl) {
-        const tb = textEl.getBBox();
-        r = Math.max(
-          5,
-          Math.min(20, Math.floor(Math.max(tb.width, tb.height) * 0.9))
-        );
-      }
-    } catch {
-      // ignore bbox problems, usar r por defecto
-    }
+    // Radio proporcional al tamaño del diente (en unidades viewBox).
+    const minSide = Math.min(center.bbox.width, center.bbox.height) || 40;
+    const r = Math.max(8, Math.min(45, Math.round(minSide * 0.35)));
 
     // crear círculo en coordenadas del SVG (overlay comparte el mismo sistema)
     const circle = document.createElementNS(
       'http://www.w3.org/2000/svg',
       'circle'
     );
-    circle.setAttribute('cx', String(centerSvgPoint.x + offsetX));
-    circle.setAttribute('cy', String(centerSvgPoint.y + offsetY));
+    circle.setAttribute('cx', String(center.x));
+    circle.setAttribute('cy', String(center.y));
     circle.setAttribute('r', String(r));
 
     // estilo del círculo (sin relleno, con borde)
@@ -1767,28 +1699,16 @@ export function addFusion(toothName, color = 'blue') {
       );
       previous.forEach((p) => p.remove());
 
-      const textEl = Array.from(svg.querySelectorAll('text.tooth-name')).find(
-        (t) => (t.textContent || '').trim() === d
-      );
-
-      const toothGroup = svg.querySelector(`g.tooth-group[data-name="${d}"]`);
-
+      // Centro en coordenadas viewBox (mismo espacio que el overlay).
+      // centerOfTooth usa getElementToSvgMatrix; antes se usaba getCTM(), que
+      // devuelve píxeles CSS y dibujaba la elipse desplazada a otro diente
+      // (mismo bug de espacio de coordenadas que 7.3→3.8).
       let cx = 0,
         cy = 0;
-
-      if (textEl) {
-        const x = parseFloat(textEl.getAttribute('x'));
-        const y = parseFloat(textEl.getAttribute('y'));
-        const pt = svg.createSVGPoint();
-        pt.x = x;
-        pt.y = y;
-        const global = pt.matrixTransform(textEl.getCTM());
-        cx = global.x;
-        cy = global.y;
-      } else if (toothGroup) {
-        const bbox = toothGroup.getBBox();
-        cx = bbox.x + bbox.width / 2;
-        cy = bbox.y + bbox.height / 2;
+      const center = centerOfTooth(svg, d);
+      if (center) {
+        cx = center.x;
+        cy = center.y;
       }
 
       const circle = document.createElementNS(
