@@ -298,6 +298,20 @@ La vista contiene dos secciones complementarias:
 > "Registro de intervenciones" (formal, persistido en BD con diagnóstico/tratamiento).
 > La primera traza lo dibujado en el editor SVG; la segunda es el registro clínico oficial.
 
+### Modelo clínico (NTS N° 188-MINSA/2022) — multi-hallazgo por superficie
+
+La unidad de registro es la **superficie** del diente (vestibular, lingual/palatina,
+mesial, distal, oclusal/incisal), no el diente completo. Por eso **un diente admite
+varios tratamientos a la vez** (p.ej. caries en oclusal + obturación en mesial), más
+estados de diente completo (corona, ausente, implante, movilidad…). Color **azul =
+buen estado / tratamiento realizado**; **rojo = mal estado / patología**.
+
+**Reglas de exclusión clínica** (v1, ver ADR-0020): una pieza marcada como **AUSENTE**
+(PDA: DNE/DEX/DAO) no admite otros tratamientos en el mismo odontograma (se bloquea);
+marcar ausente una pieza que ya tiene registros se permite con advertencia (válido en
+evolución). Trabajo futuro: trasladar las reglas al dominio del backend y cerrar la
+nomenclatura a la lista oficial.
+
 ---
 
 ## Convenciones del proyecto

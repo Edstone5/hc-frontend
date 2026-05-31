@@ -156,8 +156,46 @@ export default function OdontogramaToolsPanel({
     ]);
   };
 
-  // Wrapper síncrono: fotografía → aplica → registra (si no falló).
+  // ── Reglas de exclusión clínica (NTS-188 / ADR-0020) ────────────────────
+  // El odontograma registra hallazgos POR SUPERFICIE, así que un diente admite
+  // VARIOS tratamientos a la vez (p.ej. caries en oclusal + obturación en mesial).
+  // Pero hay combinaciones clínicamente imposibles. Regla v1:
+  //   - Una pieza marcada AUSENTE (PDA: DNE/DEX/DAO) no puede recibir otros
+  //     tratamientos en el mismo odontograma → se BLOQUEA.
+  //   - Marcar AUSENTE una pieza que ya tiene registros se PERMITE pero ADVIERTE
+  //     (es válido en evolución: pieza tratada y luego extraída).
+  const esAusente = (label = '') =>
+    /pieza ausente|\b(?:DNE|DEX|DAO)\b/i.test(label);
+
+  const validarExclusion = (tooth, label) => {
+    if (!tooth) return { ok: true };
+    const previos = treatments.filter((t) => t.tooth === tooth);
+    if (!previos.length) return { ok: true };
+    const yaAusente = previos.some((t) => esAusente(t.label));
+    const nuevoAusente = esAusente(label);
+    if (yaAusente && !nuevoAusente) {
+      return {
+        ok: false,
+        msg: `La pieza ${tooth} está marcada como AUSENTE: no admite otros tratamientos en este odontograma. Elimina la marca de ausencia primero.`,
+      };
+    }
+    if (nuevoAusente && !yaAusente) {
+      return {
+        ok: true,
+        warn: `La pieza ${tooth} ya tiene ${previos.length} registro(s); marcarla como AUSENTE puede ser inconsistente en un odontograma inicial.`,
+      };
+    }
+    return { ok: true };
+  };
+
+  // Wrapper síncrono: valida exclusión → fotografía → aplica → registra.
   const track = (label, tooth, color, drawFn) => {
+    const ex = validarExclusion(tooth, label);
+    if (!ex.ok) {
+      toast.error(ex.msg);
+      return false;
+    }
+    if (ex.warn) toast(ex.warn, { icon: '⚠️', duration: 5000 });
     const before = snapshotOverlay();
     let ok;
     try {
