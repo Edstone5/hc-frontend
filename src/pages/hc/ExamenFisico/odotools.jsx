@@ -1,13 +1,36 @@
 // src/pages/hc/ExamenFisico/odotools.jsx
+/**
+ * Panel de herramientas del odontograma — NTS N° 188-MINSA/DGIESP-2022.
+ *
+ * Cambios 2026-05-31 (ADR-0016):
+ *
+ * BUGS CORREGIDOS:
+ *   1. useState mal destructurado: `const [setCoronaTempMenuOpen] = useState(false)`
+ *      capturaba el VALOR (false) en lugar del setter, causando TypeError al llamarla.
+ *      → `const [, setCoronaTempMenuOpen] = useState(false)`
+ *
+ *   2. foreignObjectBBoxInSvg usaba fo.getCTM() como ruta primaria, que devuelve
+ *      coordenadas CSS-pixel (0..320), inconsistente con toothBox que tras el commit
+ *      9ce4a1c devuelve unidades viewBox (0..1400). El resultado era que la comparación
+ *      de intersección/distancia mezclaba dos espacios de coordenadas.
+ *      → Se elimina la ruta primaria; siempre usa getBoundingClientRect +
+ *        svg.getScreenCTM().inverse() (espacio viewBox, correcto).
+ *
+ *   3. onClear usaba window.prompt + window.confirm, no aptos para tablet (NTS-188 UX).
+ *      → Reemplazado por clearModalOpen: modal inline con botones táctiles.
+ *
+ * MEJORAS VISUALES:
+ *   - Botones agrupados en 6 secciones clínicas con cabeceras tipográficas.
+ *   - Todos los botones de tratamiento al mismo tamaño (grid 2 columnas, w-full).
+ *   - Submenús uniformes: fondo blanco, sombra, bordes redondeados, icono color.
+ *   - Modo activo: banner amarillo con botón "Detener".
+ *   - Utilidades (Deshacer / Borrar / Historial / Guardar) en grid 2×2 al pie.
+ *   - Tipografía y paleta consistentes con NTS-188 (azul buen estado, rojo mal estado).
+ */
+
 import React, { useState, useEffect } from 'react';
 import toast from 'react-hot-toast';
 import odontogramaTools from '../../../hooks/odotools';
-
-/**
- * Panel con herramientas del odontograma.
- * Contiene: Corona, Corona temporal, Defectos (añadidos visualmente), Diastema (una X por activación),
- * Aparatos ortodónticos y utilidades de anotación.
- */
 
 export default function OdontogramaToolsPanel({
   onSaveVersion,
@@ -15,31 +38,37 @@ export default function OdontogramaToolsPanel({
   selectedTooth = null,
   onClearTooth,
 }) {
+  // ── Catálogos ────────────────────────────────────────────────────────
   const crownTypes = ['CM', 'CF', 'CMC', 'CV', 'CLM'];
   const colors = ['blue', 'red'];
-
   const defectTypes = ['O', 'PE', 'Fluorosis'];
   const missingToothTypes = ['DNE', 'DEX', 'DAO'];
   const pdcTypes = [
-    // Nuevas opciones de PDC
     { id: 'SUP_PERM', label: 'Superior Permanentes' },
     { id: 'SUP_DECID', label: 'Superior Deciduos' },
     { id: 'INF_PERM', label: 'Inferior Permanentes' },
     { id: 'INF_DECID', label: 'Inferior Deciduos' },
   ];
 
+  // ── Estado de menús ──────────────────────────────────────────────────
   const [coronaMenuOpen, setCoronaMenuOpen] = useState(false);
-  const [setCoronaTempMenuOpen] = useState(false);
+  // FIX #1: antes `const [setCoronaTempMenuOpen] = useState(false)` tomaba
+  // el valor (false) en vez del setter → TypeError al invocarla.
+  const [, setCoronaTempMenuOpen] = useState(false);
   const [defectMenuOpen, setDefectMenuOpen] = useState(false);
   const [edentuloMenuOpen, setEdentuloMenuOpen] = useState(false);
   const [implantMenuOpen, setImplantMenuOpen] = useState(false);
-
-  const [activeTool, setActiveTool] = useState(null);
-  const [activeToolName, setActiveToolName] = useState(null);
+  const [giroMenuOpen, setGiroMenuOpen] = useState(false);
   const [pdaMenuOpen, setPDAMenuOpen] = useState(false);
   const [pdcMenuOpen, setPDCMenuOpen] = useState(false);
-  // Color activo (NTS-188): azul = buen estado, rojo = mal estado. Reemplaza
-  // los window.prompt de color (no aptos para tablet).
+  // FIX #3: modal de borrado — reemplaza window.prompt + window.confirm
+  const [clearModalOpen, setClearModalOpen] = useState(false);
+
+  // ── Herramienta de modo interactivo ─────────────────────────────────
+  const [activeTool, setActiveTool] = useState(null);
+  const [activeToolName, setActiveToolName] = useState(null);
+
+  // ── Color NTS-188: azul = buen estado / rojo = mal estado ───────────
   const [colorActivo, setColorActivo] = useState('blue');
 
   useEffect(() => {
@@ -55,15 +84,32 @@ export default function OdontogramaToolsPanel({
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
 
-  // Si hay un diente seleccionado por click en el SVG, se usa directamente
-  // (sin prompt). Si no, se recurre al window.prompt como respaldo.
-  const askTooth = (message = 'Ingresa el diente (ej: 1.6)') => {
+  // Cierra todos los desplegables (para toggle exclusivo)
+  const closeAllMenus = () => {
+    setCoronaMenuOpen(false);
+    setCoronaTempMenuOpen(false);
+    setDefectMenuOpen(false);
+    setEdentuloMenuOpen(false);
+    setImplantMenuOpen(false);
+    setGiroMenuOpen(false);
+    setPDAMenuOpen(false);
+    setPDCMenuOpen(false);
+  };
+
+  // Toggle exclusivo: cierra los demás y alterna el solicitado
+  const toggleMenu = (currentVal, setter) => {
+    const next = !currentVal;
+    closeAllMenus();
+    setter(next);
+  };
+
+  // ── Helpers de entrada ───────────────────────────────────────────────
+  const askTooth = (msg = 'Ingresa el diente (ej: 1.6)') => {
     if (selectedTooth) return selectedTooth;
-    const t = window.prompt(message);
+    const t = window.prompt(msg);
     return t ? t.trim() : null;
   };
 
-  // Devuelve el color activo seleccionado en el panel (sin prompt).
   const askColor = () => colorActivo;
 
   const stopActiveTool = () => {
@@ -78,31 +124,12 @@ export default function OdontogramaToolsPanel({
     setActiveToolName(null);
   };
 
-  // --- Helpers para calcular bbox de foreignObject en coords SVG ---
+  // ── foreignObjectBBoxInSvg ───────────────────────────────────────────
+  // FIX #2: eliminada la ruta primaria (fo.getCTM()) que daba CSS-pixel.
+  // Ahora siempre usa getBoundingClientRect → getScreenCTM().inverse()
+  // para obtener coordenadas en espacio viewBox, igual que getToothBBox.
   function foreignObjectBBoxInSvg(svg, fo) {
     try {
-      try {
-        const foBox = fo.getBBox();
-        const foCTM = fo.getCTM ? fo.getCTM() : null;
-        if (foCTM) {
-          const pt1 = svg.createSVGPoint();
-          pt1.x = foBox.x;
-          pt1.y = foBox.y;
-          const pt2 = svg.createSVGPoint();
-          pt2.x = foBox.x + foBox.width;
-          pt2.y = foBox.y + foBox.height;
-          const t1 = pt1.matrixTransform(foCTM);
-          const t2 = pt2.matrixTransform(foCTM);
-          const minX = Math.min(t1.x, t2.x);
-          const minY = Math.min(t1.y, t2.y);
-          const maxX = Math.max(t1.x, t2.x);
-          const maxY = Math.max(t1.y, t2.y);
-          return { x: minX, y: minY, width: maxX - minX, height: maxY - minY };
-        }
-      } catch {
-        /* fallback */
-      }
-
       const rect = fo.getBoundingClientRect();
       const screenCTM = svg.getScreenCTM();
       if (!screenCTM) return null;
@@ -115,11 +142,12 @@ export default function OdontogramaToolsPanel({
       pBR.y = rect.bottom;
       const tTL = pTL.matrixTransform(inv);
       const tBR = pBR.matrixTransform(inv);
-      const minX = Math.min(tTL.x, tBR.x);
-      const minY = Math.min(tTL.y, tBR.y);
-      const maxX = Math.max(tTL.x, tBR.x);
-      const maxY = Math.max(tTL.y, tBR.y);
-      return { x: minX, y: minY, width: maxX - minX, height: maxY - minY };
+      return {
+        x: Math.min(tTL.x, tBR.x),
+        y: Math.min(tTL.y, tBR.y),
+        width: Math.abs(tBR.x - tTL.x),
+        height: Math.abs(tBR.y - tTL.y),
+      };
     } catch {
       return null;
     }
@@ -134,7 +162,7 @@ export default function OdontogramaToolsPanel({
     return (x2 - x1) * (y2 - y1);
   }
 
-  // Busca el foreignObject más apropiado y escribe texto/color en su input
+  // Escribe sigla y color en el input del foreignObject más cercano al diente
   function setInputForTooth(tooth, text, color) {
     try {
       const svg = odontogramaTools.getSvg();
@@ -142,20 +170,18 @@ export default function OdontogramaToolsPanel({
       const info = odontogramaTools.getToothBBox(svg, tooth);
       if (!info) return false;
       const toothBox = info.bbox;
-      const inputs = Array.from(svg.querySelectorAll('foreignObject'));
-      if (!inputs.length) return false;
-
-      let bestFo = null;
-      let bestOverlap = -1;
-      let bestDist = Infinity;
-      let bestFoByDist = null;
-
       const toothCenter = {
         x: toothBox.x + toothBox.width / 2,
         y: toothBox.y + toothBox.height / 2,
       };
+      const fos = Array.from(svg.querySelectorAll('foreignObject'));
+      if (!fos.length) return false;
 
-      for (const fo of inputs) {
+      let bestFo = null,
+        bestOverlap = -1,
+        bestDist = Infinity,
+        bestFoByDist = null;
+      for (const fo of fos) {
         const foBox = foreignObjectBBoxInSvg(svg, fo);
         if (!foBox) continue;
         const overlap = rectIntersectionArea(foBox, toothBox);
@@ -163,16 +189,12 @@ export default function OdontogramaToolsPanel({
           bestOverlap = overlap;
           bestFo = fo;
         }
-        const foCenter = {
-          x: foBox.x + foBox.width / 2,
-          y: foBox.y + foBox.height / 2,
-        };
-        const dist = Math.hypot(
-          foCenter.x - toothCenter.x,
-          foCenter.y - toothCenter.y
+        const d = Math.hypot(
+          foBox.x + foBox.width / 2 - toothCenter.x,
+          foBox.y + foBox.height / 2 - toothCenter.y
         );
-        if (dist < bestDist) {
-          bestDist = dist;
+        if (d < bestDist) {
+          bestDist = d;
           bestFoByDist = fo;
         }
       }
@@ -191,7 +213,6 @@ export default function OdontogramaToolsPanel({
     }
   }
 
-  // AÑADISTE
   function clearInputForTooth(tooth) {
     try {
       const svg = odontogramaTools.getSvg();
@@ -199,37 +220,31 @@ export default function OdontogramaToolsPanel({
       const info = odontogramaTools.getToothBBox(svg, tooth);
       if (!info) return false;
       const toothBox = info.bbox;
-      const inputs = Array.from(svg.querySelectorAll('foreignObject'));
-      if (!inputs.length) return false;
-
-      let bestFo = null;
-      let bestOverlap = -1;
-      let bestDist = Infinity;
-      let bestFoByDist = null;
-
       const toothCenter = {
         x: toothBox.x + toothBox.width / 2,
         y: toothBox.y + toothBox.height / 2,
       };
+      const fos = Array.from(svg.querySelectorAll('foreignObject'));
+      if (!fos.length) return false;
 
-      for (const fo of inputs) {
-        const foBox = foreignObjectBBoxInSvg(svg, fo); // foreignObjectBBoxInSvg ya existe
+      let bestFo = null,
+        bestOverlap = -1,
+        bestDist = Infinity,
+        bestFoByDist = null;
+      for (const fo of fos) {
+        const foBox = foreignObjectBBoxInSvg(svg, fo);
         if (!foBox) continue;
-        const overlap = rectIntersectionArea(foBox, toothBox); // rectIntersectionArea ya existe
+        const overlap = rectIntersectionArea(foBox, toothBox);
         if (overlap > bestOverlap) {
           bestOverlap = overlap;
           bestFo = fo;
         }
-        const foCenter = {
-          x: foBox.x + foBox.width / 2,
-          y: foBox.y + foBox.height / 2,
-        };
-        const dist = Math.hypot(
-          foCenter.x - toothCenter.x,
-          foCenter.y - toothCenter.y
+        const d = Math.hypot(
+          foBox.x + foBox.width / 2 - toothCenter.x,
+          foBox.y + foBox.height / 2 - toothCenter.y
         );
-        if (dist < bestDist) {
-          bestDist = dist;
+        if (d < bestDist) {
+          bestDist = d;
           bestFoByDist = fo;
         }
       }
@@ -238,7 +253,6 @@ export default function OdontogramaToolsPanel({
       if (!chosenFo) return false;
       const input = chosenFo.querySelector('input, textarea');
       if (!input) return false;
-      // --- Lógica de Limpieza ---
       input.value = '';
       input.style.border = '';
       input.style.color = '';
@@ -248,727 +262,468 @@ export default function OdontogramaToolsPanel({
       return false;
     }
   }
-  // --- CORONA (mantener comportamiento original) ---  // MODIFICASTE
-  const onSelectCorona = (type, color) => {
-    setCoronaMenuOpen(false);
-    const tooth = askTooth(
-      `Ingresa número de diente para aplicar ${type} (${color}) (ej: 2.7):`
-    );
-    if (!tooth) return;
-    try {
-      const includedParts = [
-        'fosas',
-        'surcos',
-        'fosa1',
-        'fosa2',
-        'fosa3',
-        'surco1',
-        'surco2',
-        'surco3',
-      ];
-      const ok = odontogramaTools.addCrown(tooth, type, color, includedParts);
-      if (!ok) {
-        toast.error(
-          `No se encontró el diente ${tooth}. Asegúrate de escribirlo exactamente como en la etiqueta (ej: 2.7).`
-        );
-        return;
-      }
-      setInputForTooth(tooth, type, color);
-    } catch (e) {
-      console.error('Error aplicando corona:', e);
-      toast.error(
-        'Ocurrió un error al intentar aplicar la corona. Revisa la consola.'
-      );
-    }
-  };
 
-  const onCoronaButton = () => {
-    setCoronaMenuOpen((s) => !s);
-    setCoronaTempMenuOpen(false);
-    setDefectMenuOpen(false);
-    setEdentuloMenuOpen(false);
-  };
+  // ====================================================================
+  // HANDLERS DE HERRAMIENTAS
+  // ====================================================================
 
-  const onCoronaTemporal = () => {
-    const tooth = askTooth(
-      'Ingresa número de diente para aplicar Corona Temporal (CT) (ej: 2.7):'
-    );
-    if (!tooth) return;
-    try {
-      const includedParts = [
-        'fosas',
-        'surcos',
-        'fosa1',
-        'fosa2',
-        'fosa3',
-        'surco1',
-        'surco2',
-        'surco3',
-      ];
-      const crownType = 'CT';
-      const color = 'red';
-      const ok = odontogramaTools.addCrown(
-        tooth,
-        crownType,
-        color,
-        includedParts
-      );
-      if (!ok) {
-        toast.error(`No se encontró el diente ${tooth}.`);
-        return;
-      }
-      setInputForTooth(tooth, crownType, color);
-    } catch (e) {
-      console.error('Error aplicando corona temporal:', e);
-      toast.error(
-        'Ocurrió un error al intentar aplicar la corona temporal. Revisa la consola.'
-      );
-    }
-  };
-
-  const onCoronaTempButton = () => {
-    onCoronaTemporal();
-  };
-
-  // --- DEFECTOS: ahora además dibuja marcador en SVG usando addDefect ---
-  const onSelectDefect = (defect) => {
-    setDefectMenuOpen(false);
-    const tooth = askTooth(
-      `Ingresa número de diente para aplicar defecto "${defect}" (ej: 2.7):`
-    );
-    if (!tooth) return;
-    try {
-      const color = 'red';
-      const ok = setInputForTooth(tooth, defect, color);
-      try {
-        if (typeof odontogramaTools.addDefect === 'function') {
-          odontogramaTools.addDefect(tooth, defect, color);
-        }
-      } catch (err) {
-        console.error('Error dibujando defecto en SVG:', err);
-      }
-      if (!ok) {
-        // opcional: notificar, pero no obligatorio
-      }
-    } catch (e) {
-      console.error('Error aplicando defecto:', e);
-      toast.error(
-        'Ocurrió un error al intentar aplicar el defecto. Revisa la consola.'
-      );
-    }
-  };
-
-  const onDefectButton = () => {
-    setDefectMenuOpen((s) => !s);
-    setCoronaMenuOpen(false);
-    setCoronaTempMenuOpen(false);
-    setEdentuloMenuOpen(false);
-  };
-
-  // --- ORTHO MODES (mantener comportamiento) ---
+  // 1 & 2 — Aparatos ortodónticos
   const onFixedOrtho = () => {
-    const color = askColor('blue');
     try {
-      const handle = odontogramaTools.startFixedOrthoMode(color);
-      if (handle && typeof handle.stop === 'function') {
+      const handle = odontogramaTools.startFixedOrthoMode(askColor());
+      if (handle?.stop) {
         setActiveTool(handle);
-        setActiveToolName('Aparato ortod. fijo');
+        setActiveToolName('Ortod. fijo');
       }
-      toast(
-        'Modo "Aparato ortodóntico fijo": Haz click en dos puntos del odontograma para dibujar la línea.\nPresiona ESC para cancelar o usa el botón "Detener modo".'
-      );
+      toast('Haz clic en dos puntos para la línea. ESC = cancelar.');
     } catch (e) {
-      console.error('Error iniciando modo fijo:', e);
-      toast.error('No se pudo iniciar el modo. Revisa la consola.');
+      console.error(e);
+      toast.error('Error al iniciar modo.');
     }
   };
 
   const onRemovableOrtho = () => {
-    const color = askColor();
-    // Valores estándar del zig-zag (sin prompts; aptos para tablet).
-    const steps = 10;
-    const amplitude = 10;
-
     try {
       const handle = odontogramaTools.startRemovableOrthoMode(
-        color,
-        steps,
-        amplitude
+        askColor(),
+        10,
+        10
       );
-      if (handle && typeof handle.stop === 'function') {
+      if (handle?.stop) {
         setActiveTool(handle);
-        setActiveToolName('Aparato ortod. removible');
+        setActiveToolName('Ortod. removible');
       }
-      toast(
-        'Modo "Aparato ortodóntico removible": Haz click en dos puntos del odontograma para dibujar el zig-zag.\nPresiona ESC para cancelar o usa el botón "Detener modo".'
-      );
+      toast('Haz clic en dos puntos para el zig-zag. ESC = cancelar.');
     } catch (e) {
-      console.error('Error iniciando modo removible:', e);
-      toast.error('No se pudo iniciar el modo. Revisa la consola.');
+      console.error(e);
+      toast.error('Error al iniciar modo.');
     }
   };
 
-  // --- FOSAS Y FISURAS PROFUNDAS (nuevo) ---
-  // Este manejador pregunta el diente y aplica la sigla "FFP" en azul,
-  // tanto en el input asociado (foreignObject) como con una etiqueta SVG.
-  const onFosasFisurasProfundas = () => {
-    const tooth = askTooth('Diente para FOSAS Y FISURAS PROFUNDAS (ej: 1.6):');
-    if (!tooth) return;
-    try {
-      // intenta primero la función del hook (dibuja etiqueta y escribe en input si puede)
-      if (typeof odontogramaTools.addFosasFisurasProfundas === 'function') {
-        const ok = odontogramaTools.addFosasFisurasProfundas(
-          tooth,
-          '#FFFFFF00'
-        );
-        // también asegúrate de escribir en el input mediante la utilidad local (por si la función del hook no encontró el foreignObject)
-        setInputForTooth(tooth, 'FFP', 'blue');
-        if (!ok) {
-          // si no encontró centro/diente en SVG, avisar
-          toast.error(
-            `No se pudo anotar "FFP" en el odontograma para el diente ${tooth}. Revisa la consola.`
-          );
-        }
-      } else {
-        // si no está disponible la función en el hook, cae a escribir solo en el input
-        const wrote = setInputForTooth(tooth, 'FFP', 'blue');
-        if (!wrote)
-          toast.error(
-            `No se encontró el diente ${tooth} ni el input asociado.`
-          );
-      }
-    } catch (e) {
-      console.error('Error aplicando FFP:', e);
-      toast.error('Ocurrió un error al aplicar FFP. Revisa la consola.');
-    }
-  };
-
-  const onFractura = () => {
-    // Nota: el botón originalmente estaba asignado a "Fosas y fisuras profundas".
-    // Reemplazamos su comportamiento por la nueva función que pregunta y aplica "FFP".
-    onFosasFisurasProfundas();
-  };
-
-  // --- IMPLANTE DENTAL (nuevo) ---
-  // Ahora: al presionar el botón principal se abre un subpanel con dos opciones:
-  // "IMP rojo" y "IMP azul". Al elegir una opción se pide el diente y se aplica IMP del color.
-  const onImplanteButton = () => {
-    setImplantMenuOpen((s) => !s);
-    // cerrar otros menús
+  // 3 — Corona
+  const onSelectCorona = (type, color) => {
     setCoronaMenuOpen(false);
-    setCoronaTempMenuOpen(false);
-    setDefectMenuOpen(false);
-    setEdentuloMenuOpen(false);
-  };
-
-  const onImplanteColor = (color) => {
-    setImplantMenuOpen(false);
     const tooth = askTooth(
-      `Diente para IMPLANTE (IMP ${color.toUpperCase()}) (ej: 1.6):`
+      `Diente para ${type} (${color === 'blue' ? 'azul' : 'rojo'}) (ej: 2.7):`
     );
     if (!tooth) return;
     try {
-      if (typeof odontogramaTools.addImplant === 'function') {
-        const ok = odontogramaTools.addImplant(tooth, '#FFFFFF00');
-        // respaldo: escribir en el input por si el hook no encuentra el foreignObject
-        setInputForTooth(tooth, 'IMP', color);
-        if (!ok) {
-          toast.error(
-            `No se pudo anotar "IMP" en el odontograma para el diente ${tooth}. Revisa la consola.`
-          );
-        }
-      } else {
-        const wrote = setInputForTooth(tooth, 'IMP', color);
-        if (!wrote)
-          toast.error(
-            `No se encontró el diente ${tooth} ni el input asociado.`
-          );
+      const parts = [
+        'fosas',
+        'surcos',
+        'fosa1',
+        'fosa2',
+        'fosa3',
+        'surco1',
+        'surco2',
+        'surco3',
+      ];
+      const ok = odontogramaTools.addCrown(tooth, type, color, parts);
+      if (!ok) {
+        toast.error(`No se encontró el diente ${tooth}.`);
+        return;
       }
-    } catch (err) {
-      console.error('Error aplicando implante:', err);
-      toast.error(
-        'Ocurrió un error al intentar anotar el implante. Revisa la consola.'
-      );
-    }
-  };
-  /// actualizado MODIFICASTE
-  const onClear = () => {
-    const action = window.prompt(
-      'Selecciona la acción de limpieza:\n' +
-        '1) Borrar TODAS las anotaciones (Limpieza Total).\n' +
-        '2) Borrar anotaciones de un DIENTE específico (Ej: 1.6).\n' +
-        'Escribe 1, 2, o el número del diente directamente si eliges la opción 2.'
-    );
-
-    if (!action) return;
-
-    const normalizedAction = action.trim();
-
-    if (normalizedAction === '1') {
-      if (
-        window.confirm(
-          '¿Confirmas que deseas borrar *todas* las anotaciones del odontograma y textos asociados?'
-        )
-      ) {
-        // Limpieza total SVG
-        odontogramaTools.clearAnnotations();
-
-        // Limpiar todos los inputs de texto
-        const svg = odontogramaTools.getSvg();
-        if (svg) {
-          svg
-            .querySelectorAll('foreignObject input, foreignObject textarea')
-            .forEach((input) => {
-              input.value = '';
-              input.style.border = '';
-              input.style.color = '';
-            });
-        }
-        toast.success(
-          'Todas las anotaciones y textos asociados han sido borrados.'
-        );
-      }
-    } else if (
-      normalizedAction === '2' ||
-      normalizedAction.match(/^[1-8]\.[1-8]\d?$/)
-    ) {
-      // Opción 2: Borrar por diente (o el usuario ingresó un diente directamente)
-      let tooth = normalizedAction;
-      if (normalizedAction === '2') {
-        tooth = askTooth('Ingresa el número de diente a limpiar (ej: 1.6):');
-        if (!tooth) return;
-      }
-
-      if (
-        window.confirm(
-          `¿Confirmas que deseas borrar las anotaciones del diente ${tooth}?`
-        )
-      ) {
-        const clearedSVG = odontogramaTools.clearAnnotationsForTooth(tooth);
-        const clearedInput = clearInputForTooth(tooth);
-
-        if (clearedSVG || clearedInput) {
-          toast.success(
-            `Se limpiaron las anotaciones y/o el input del diente ${tooth}.`
-          );
-        } else {
-          toast.error(`No se encontraron anotaciones para el diente ${tooth}.`);
-        }
-      }
-    } else {
-      toast.error(
-        'Opción no reconocida o diente inválido. Asegúrate de usar el formato X.Y (ej: 1.6).'
-      );
+      setInputForTooth(tooth, type, color);
+    } catch (e) {
+      console.error(e);
+      toast.error('Error al aplicar corona.');
     }
   };
 
-  // --- NUEVA FUNCIÓN DE RETROCEDER (UNDO) --- AÑADISTE
-  const onUndo = () => {
-    const success = odontogramaTools.clearLastAnnotation();
-    if (success) {
-      // Nota: El deshecho del texto del input asociado es complejo de automatizar,
-      // se le indica al usuario que lo haga manualmente si es necesario.
-      toast.success(
-        'Se ha deshecho la *última anotación SVG*. Por favor, verifica el texto del input asociado y corrígelo manualmente si es necesario.'
-      );
-    } else {
-      toast.error('No hay anotaciones previas que deshacer.');
-    }
-  };
-
-  // --- DIASTEMA: dibuja UNA sola X y el modo queda inactivo automáticamente ---
-  const onDiastema = () => {
-    const color = 'blue';
-    const sizeX = 18;
-    const sizeY = 44;
-    const strokeWidth = 1;
-
-    if (typeof odontogramaTools.startDiastemaMode !== 'function') {
-      toast.error(
-        'Función de diastema no disponible. Revisa src/hooks/odotools.js'
-      );
-      return;
-    }
-
-    const handle = odontogramaTools.startDiastemaMode(
-      color,
-      sizeX,
-      sizeY,
-      strokeWidth,
-      () => {
-        // limpiar estado activo del panel tras dibujar la X o cancelar
-        setActiveTool(null);
-        setActiveToolName(null);
-      }
-    );
-
-    if (handle && typeof handle.stop === 'function') {
-      setActiveTool(handle);
-      setActiveToolName('Diastema');
-    }
-    toast(
-      'Modo Diastema activo: haz click donde quieras colocar la "X" azul. Presiona ESC para salir.'
-    );
-  };
-
-  // --- EDENTULO: desplegar SUBBOTONES y dibujar línea recta entre centros de dientes ---
-  const onEdentuloButton = () => {
-    setEdentuloMenuOpen((s) => !s);
-    setCoronaMenuOpen(false);
-    setCoronaTempMenuOpen(false);
-    setDefectMenuOpen(false);
-  };
-
-  const onEdentuloSuperior = () => {
-    // según el requerimiento: dibujar linea recta desde 1.8 hasta 2.8 (centros)
-    const start = '1.8';
-    const end = '2.8';
+  // 4 — Corona temporal (siempre rojo — deciduos con mal estado)
+  const onCoronaTemporal = () => {
+    const tooth = askTooth('Diente para Corona Temporal CT (ej: 6.3):');
+    if (!tooth) return;
     try {
-      if (typeof odontogramaTools.addEdentulousLineBetween === 'function') {
-        odontogramaTools.addEdentulousLineBetween(start, end, 'Blue', 2);
-      } else {
-        toast.error('Función de edéntulo no disponible en hooks.');
+      const parts = [
+        'fosas',
+        'surcos',
+        'fosa1',
+        'fosa2',
+        'fosa3',
+        'surco1',
+        'surco2',
+        'surco3',
+      ];
+      const ok = odontogramaTools.addCrown(tooth, 'CT', 'red', parts);
+      if (!ok) {
+        toast.error(`No se encontró el diente ${tooth}.`);
+        return;
       }
-    } catch (err) {
-      console.error('Error dibujando edéntulo superior', err);
-    } finally {
-      setEdentuloMenuOpen(false);
+      setInputForTooth(tooth, 'CT', 'red');
+    } catch (e) {
+      console.error(e);
+      toast.error('Error al aplicar CT.');
+    }
+  };
+
+  // 5 — Defectos de desarrollo del esmalte
+  const onSelectDefect = (defect) => {
+    setDefectMenuOpen(false);
+    const tooth = askTooth(`Diente para defecto "${defect}" (ej: 2.7):`);
+    if (!tooth) return;
+    try {
+      setInputForTooth(tooth, defect, 'red');
+      if (typeof odontogramaTools.addDefect === 'function')
+        odontogramaTools.addDefect(tooth, defect, 'red');
+    } catch (e) {
+      console.error(e);
+      toast.error('Error al aplicar defecto.');
+    }
+  };
+
+  // 6 — Edéntulo
+  const onEdentuloSuperior = () => {
+    setEdentuloMenuOpen(false);
+    try {
+      if (typeof odontogramaTools.addEdentulousLineBetween === 'function')
+        odontogramaTools.addEdentulousLineBetween('1.8', '2.8', 'blue', 2);
+      else toast.error('Función de edéntulo no disponible.');
+    } catch (e) {
+      console.error(e);
     }
   };
 
   const onEdentuloInferior = () => {
-    // según el requerimiento: dibujar linea recta desde 4.8 hasta 3.8 (centros)
-    const start = '4.8';
-    const end = '3.8';
+    setEdentuloMenuOpen(false);
     try {
-      if (typeof odontogramaTools.addEdentulousLineBetween === 'function') {
-        odontogramaTools.addEdentulousLineBetween(start, end, 'blue', 2);
-      } else {
-        toast.error('Función de edéntulo no disponible en hooks.');
-      }
-    } catch (err) {
-      console.error('Error dibujando edéntulo inferior', err);
-    } finally {
-      setEdentuloMenuOpen(false);
+      if (typeof odontogramaTools.addEdentulousLineBetween === 'function')
+        odontogramaTools.addEdentulousLineBetween('4.8', '3.8', 'blue', 2);
+      else toast.error('Función de edéntulo no disponible.');
+    } catch (e) {
+      console.error(e);
     }
   };
 
-  // MACRODONCIA
-  const onMacrodoncia = () => {
-    const tooth = askTooth('Diente para MACRODONCIA (ej: 1.6):');
+  // 7 — Diastema
+  const onDiastema = () => {
+    if (typeof odontogramaTools.startDiastemaMode !== 'function') {
+      toast.error('Función de diastema no disponible.');
+      return;
+    }
+    const handle = odontogramaTools.startDiastemaMode('blue', 18, 44, 1, () => {
+      setActiveTool(null);
+      setActiveToolName(null);
+    });
+    if (handle?.stop) {
+      setActiveTool(handle);
+      setActiveToolName('Diastema');
+    }
+    toast('Haz clic donde colocar la "X" azul. ESC = salir.');
+  };
+
+  // 8 — Fosas y fisuras profundas
+  const onFosasFisurasProfundas = () => {
+    const tooth = askTooth('Diente para Fosas y Fisuras Profundas (ej: 1.6):');
     if (!tooth) return;
     try {
-      const ok = setInputForTooth(tooth, 'MAC', 'blue');
-      if (!ok) {
-        toast.error(
-          `No se encontró el diente ${tooth} ni su recuadro de texto asociado.`
-        );
-      }
-    } catch (err) {
-      console.error('Error aplicando MAC:', err);
-      toast.error(
-        'Ocurrió un error al intentar anotar MAC. Revisa la consola.'
-      );
+      if (typeof odontogramaTools.addFosasFisurasProfundas === 'function')
+        odontogramaTools.addFosasFisurasProfundas(tooth, '#FFFFFF00');
+      setInputForTooth(tooth, 'FFP', 'blue');
+    } catch (e) {
+      console.error(e);
+      toast.error('Error al aplicar FFP.');
     }
   };
-  // --- RENDER ---
 
-  // Im´lantación
-  const onImplantacion2 = () => {
-    const tooth = askTooth('Diente para IMPLANTACIÓN (ej: 1.6):');
+  // 9 — Fusión
+  const onFusion = () => {
+    const tooth = askTooth('Diente para FUSIÓN (ej: 1.7):');
     if (!tooth) return;
     try {
-      const ok = setInputForTooth(tooth, 'I', 'blue');
-      if (!ok) {
-        toast.error(
-          `No se encontró el diente ${tooth} ni su recuadro de texto asociado.`
-        );
-      }
-    } catch (err) {
-      console.error('Error aplicando I:', err);
-      toast.error('Ocurrió un error al intentar anotar I. Revisa la consola.');
+      if (typeof odontogramaTools.addFusion === 'function') {
+        const ok = odontogramaTools.addFusion(tooth, 'blue');
+        if (!ok) toast.error(`No se pudo dibujar fusión en ${tooth}.`);
+      } else toast.error('addFusion no disponible.');
+    } catch (e) {
+      console.error(e);
+      toast.error('Error al aplicar fusión.');
     }
   };
 
-  // GERMINACION
+  // 10 — Germinación
   const onGerminacion = () => {
     const tooth = askTooth('Diente para GERMINACIÓN (ej: 1.6):');
     if (!tooth) return;
     try {
       if (typeof odontogramaTools.addGerminacion === 'function') {
         const ok = odontogramaTools.addGerminacion(tooth, 'blue');
-        if (!ok) {
-          toast.error(
-            `No se pudo dibujar la germinación en el diente ${tooth}. Revisa la consola.`
-          );
-        }
-      } else {
-        toast.error(
-          'La función addGerminacion no está disponible en hooks/odotools.'
-        );
-      }
-    } catch (err) {
-      console.error('Error aplicando germinación:', err);
-      toast.error(
-        'Ocurrió un error al aplicar germinación. Revisa la consola.'
-      );
+        if (!ok) toast.error(`No se pudo dibujar germinación en ${tooth}.`);
+      } else toast.error('addGerminacion no disponible.');
+    } catch (e) {
+      console.error(e);
+      toast.error('Error al aplicar germinación.');
     }
   };
 
-  //
-  const onFusion = () => {
-    const tooth = askTooth('Diente para FUSIÓN (ej: 1.7):');
-    if (!tooth) return;
-
-    try {
-      if (typeof odontogramaTools.addFusion === 'function') {
-        const ok = odontogramaTools.addFusion(tooth, 'blue');
-        if (!ok) {
-          toast.error(
-            `No se pudo dibujar la FUSIÓN en el diente ${tooth}. Revisa la consola.`
-          );
-        }
-      } else {
-        toast.error(
-          'La función addFusion no está disponible en hooks/odotools.'
-        );
-      }
-    } catch (err) {
-      console.error('Error aplicando FUSIÓN:', err);
-      toast.error('Ocurrió un error al aplicar FUSIÓN. Revisa la consola.');
-    }
-  };
-
-  // GIROVERSIÓN
-
-  const [giroMenuOpen, setGiroMenuOpen] = useState(false);
-
-  const onGiroversionButton = () => {
-    setGiroMenuOpen((s) => !s);
-    // cerrar otros menús
-    setCoronaMenuOpen(false);
-    setCoronaTempMenuOpen(false);
-    setDefectMenuOpen(false);
-    setEdentuloMenuOpen(false);
-    setImplantMenuOpen(false);
-  };
-
+  // 11 — Giroversión
   const onGiroversionDirection = (direction) => {
     setGiroMenuOpen(false);
     const tooth = askTooth(
-      `Diente para GIROVERSIÓN (ej: 1.7). Flecha hacia ${direction === 'right' ? 'derecha' : 'izquierda'}:`
+      `Diente para GIROVERSIÓN ${direction === 'right' ? '→' : '←'} (ej: 1.7):`
     );
     if (!tooth) return;
     try {
       if (typeof odontogramaTools.addGiroversion === 'function') {
         const ok = odontogramaTools.addGiroversion(tooth, direction, 'blue');
-        if (!ok) {
-          toast.error(
-            `No se pudo dibujar giroversión para ${tooth}. Revisa la consola.`
-          );
-        }
-      } else {
-        toast.error(
-          'La función addGiroversion no está disponible en hooks/odotools.'
-        );
-      }
-    } catch (err) {
-      console.error('Error aplicando giroversión:', err);
-      toast.error(
-        'Ocurrió un error al aplicar giroversión. Revisa la consola.'
-      );
+        if (!ok) toast.error(`No se pudo dibujar giroversión en ${tooth}.`);
+      } else toast.error('addGiroversion no disponible.');
+    } catch (e) {
+      console.error(e);
+      toast.error('Error al aplicar giroversión.');
     }
   };
-  // --- RENDER ---
 
-  // mícrodoncia
+  // 12 — Implantación dental
+  const onImplanteColor = (color) => {
+    setImplantMenuOpen(false);
+    const tooth = askTooth('Diente para Implantación dental (IMP) (ej: 1.6):');
+    if (!tooth) return;
+    try {
+      if (typeof odontogramaTools.addImplant === 'function')
+        odontogramaTools.addImplant(tooth, '#FFFFFF00');
+      setInputForTooth(tooth, 'IMP', color);
+    } catch (e) {
+      console.error(e);
+      toast.error('Error al anotar implante.');
+    }
+  };
+
+  // 13 — Impactación
+  const onImplantacion2 = () => {
+    const tooth = askTooth('Diente para IMPACTACIÓN (I) (ej: 1.6):');
+    if (!tooth) return;
+    if (!setInputForTooth(tooth, 'I', 'blue'))
+      toast.error(`No se encontró el diente ${tooth}.`);
+  };
+
+  // 14 — Macrodoncia
+  const onMacrodoncia = () => {
+    const tooth = askTooth('Diente para MACRODONCIA (ej: 1.6):');
+    if (!tooth) return;
+    if (!setInputForTooth(tooth, 'MAC', 'blue'))
+      toast.error(`No se encontró el diente ${tooth}.`);
+  };
+
+  // 15 — Microdoncia
   const onMicrodoncia = () => {
     const tooth = askTooth('Diente para MICRODONCIA (ej: 1.6):');
     if (!tooth) return;
-    try {
-      const ok = setInputForTooth(tooth, 'MIC', 'blue');
-      if (!ok) {
-        toast.error(
-          `No se encontró el diente ${tooth} ni su recuadro de texto asociado.`
-        );
-      }
-    } catch (err) {
-      console.error('Error aplicando MIC:', err);
-      toast.error(
-        'Ocurrió un error al intentar anotar MIC. Revisa la consola.'
-      );
-    }
+    if (!setInputForTooth(tooth, 'MIC', 'blue'))
+      toast.error(`No se encontró el diente ${tooth}.`);
   };
 
-  // render
-  //19
+  // 16 — Movilidad patológica (siempre rojo — mal estado)
   const onMobilidad = () => {
-    const tooth = askTooth('Diente para MOVILIDAD (ej: 1.6):');
+    const tooth = askTooth('Diente para MOVILIDAD PATOLÓGICA (ej: 1.6):');
     if (!tooth) return;
-    try {
-      const ok = setInputForTooth(tooth, 'M', 'red');
-      if (!ok) {
-        toast.error(
-          `No se encontró el diente ${tooth} ni su recuadro de texto asociado.`
-        );
-      }
-    } catch (err) {
-      console.error('Error aplicando M:', err);
-      toast.error('Ocurrió un error al intentar anotar M. Revisa la consola.');
-    }
+    if (!setInputForTooth(tooth, 'M', 'red'))
+      toast.error(`No se encontró el diente ${tooth}.`);
   };
 
+  // 17 — Pieza dentaria ausente
   const onSelectPDA = (typeId, color = 'blue') => {
-    setPDAMenuOpen(false); // Cierra el menú
-    const tooth = askTooth(`Diente de Dentaría Ausente (ej: 2.7):`);
+    setPDAMenuOpen(false);
+    const tooth = askTooth(
+      `Diente para Pieza Dentaria Ausente ${typeId} (ej: 2.7):`
+    );
     if (!tooth) return;
     try {
-      const ok = setInputForTooth(tooth, typeId, color);
-      if (!ok) {
-        toast.error(
-          `No se encontró el diente ${tooth} ni su recuadro de texto asociado.`
-        );
-      }
+      setInputForTooth(tooth, typeId, color);
       odontogramaTools.addMissingTooth(tooth, color);
     } catch (e) {
-      console.error('Error aplicando PDA:', e);
-      toast.error(
-        'Ocurrió un error al intentar aplicar la Pieza de dentadura ausente. Revisa la consola.'
-      );
+      console.error(e);
+      toast.error('Error al aplicar PDA.');
     }
   };
 
-  const onPDAButton = () => {
-    setPDAMenuOpen((s) => !s);
-  };
-
-  const onPiezaEctopica = () => {
-    const tooth = askTooth('Diente Ectópico (ej: 2.7):');
-    if (!tooth) return;
-    try {
-      const ok = setInputForTooth(tooth, 'E', 'blue');
-      if (!ok) {
-        toast.error(
-          `No se encontró el diente ${tooth} ni su recuadro de texto asociado.`
-        );
-      }
-    } catch (e) {
-      console.error('Error aplicando Pieza Dentaria Ectópica:', e);
-      toast.error('Ocurrió un error al intentar anotar. Revisa la consola.');
-    }
-  };
-
+  // 18 — Pieza en clavija
   const onPiezaClavija = () => {
-    const tooth = askTooth('Diente en Clavija (ej: 2.7):');
+    const tooth = askTooth('Diente en clavija (PC) (ej: 2.7):');
     if (!tooth) return;
     try {
       const ok = odontogramaTools.addPegTooth(tooth, 'blue');
-      if (!ok) {
-        toast.error(
-          `No se pudo dibujar la Pieza dentaria en clavija en el diente ${tooth}.`
-        );
-      }
+      if (!ok) toast.error(`No se pudo dibujar pieza en clavija en ${tooth}.`);
     } catch (e) {
-      console.error('Error aplicando Pieza en Clavija:', e);
-      toast.error(
-        'Ocurrió un error al intentar aplicar la Pieza dentaria en clavija. Revisa la consola.'
-      );
+      console.error(e);
+      toast.error('Error al aplicar pieza en clavija.');
     }
   };
 
+  // 19 — Pieza ectópica
+  const onPiezaEctopica = () => {
+    const tooth = askTooth('Diente ectópico (E) (ej: 2.7):');
+    if (!tooth) return;
+    if (!setInputForTooth(tooth, 'E', 'blue'))
+      toast.error(`No se encontró el diente ${tooth}.`);
+  };
+
+  // 20 — Pulpotomía
   const onPulpotomia = () => {
-    const tooth = askTooth('Diente para Pulpotomía (ej: 1.6):');
+    const tooth = askTooth('Diente para Pulpotomía (PP) (ej: 6.3):');
     if (!tooth) return;
     try {
-      const color = askColor('blue');
-      const ok = setInputForTooth(tooth, 'PP', color);
-      if (!ok) {
-        toast.error(
-          `No se encontró el diente ${tooth} ni su recuadro de texto asociado.`
-        );
-      }
+      const color = askColor();
+      setInputForTooth(tooth, 'PP', color);
       odontogramaTools.addPulpotomy(tooth, color);
-      //const svg = document.querySelector('svg.odo');
-    } catch (err) {
-      console.error('Error aplicando:', err);
-      toast.error('Ocurrió un error al intentar anotar. Revisa la consola.');
-    }
-  };
-
-  const onProtesisPR = () => {
-    const color = askColor('blue');
-    odontogramaTools.addDentalProsthesis(color);
-    toast(
-      'Modo "PPR": Haz click en el diente pilar inicial y luego en el diente pilar final.\nPresiona ESC para cancelar.'
-    );
-  };
-
-  const onSelectPDC = (typeId, color) => {
-    setPDCMenuOpen(false); // Cierra el menú
-    let arcada;
-
-    if (typeId === 'SUP_PERM' || typeId === 'SUP_DECID') {
-      arcada = 'superior';
-    } else {
-      // INF_PERM o INF_DECID
-      arcada = 'inferior';
-    }
-
-    try {
-      const ok = odontogramaTools.addPDC(arcada, color, typeId);
-      if (!ok) {
-        toast.error(
-          'No se pudo dibujar la Prótesis Completa. Revisa si los molares terminales están presentes.'
-        );
-      }
     } catch (e) {
-      console.error('Error aplicando PDC:', e);
-      toast.error(
-        'Ocurrió un error al intentar aplicar la Prótesis Completa. Revisa la consola.'
-      );
+      console.error(e);
+      toast.error('Error al aplicar pulpotomía.');
     }
   };
 
-  const onPDCButton = () => {
-    setPDCMenuOpen((s) => !s);
-  };
-
-  const onPPF = () => {
-    const color = askColor('blue');
-    odontogramaTools.addPPF(color);
-  };
-
+  // 21 — Transposición dentaria
   const onTransposicion = () => {
-    //const color = askColor('red'); // Pide el color (normalmente rojo)
-    // Llama a la nueva función interactiva
     odontogramaTools.addTransposition('blue');
   };
 
-  // render
+  // 22 — Prótesis Dental Parcial Fija
+  const onPPF = () => {
+    odontogramaTools.addPPF(askColor());
+  };
 
-  //LESION
+  // 23 — Prótesis Dental Completa
+  const onSelectPDC = (typeId, color) => {
+    setPDCMenuOpen(false);
+    const arcada =
+      typeId === 'SUP_PERM' || typeId === 'SUP_DECID' ? 'superior' : 'inferior';
+    try {
+      const ok = odontogramaTools.addPDC(arcada, color, typeId);
+      if (!ok) toast.error('No se pudo dibujar la Prótesis Completa.');
+    } catch (e) {
+      console.error(e);
+      toast.error('Error al aplicar PDC.');
+    }
+  };
 
+  // 24 — Prótesis Dental Parcial Removible
+  const onProtesisPR = () => {
+    odontogramaTools.addDentalProsthesis(askColor());
+    toast(
+      'Haz clic en el diente pilar inicial y luego en el final. ESC = cancelar.'
+    );
+  };
+
+  // ── Utilidades ────────────────────────────────────────────────────────
+
+  const onUndo = () => {
+    if (odontogramaTools.clearLastAnnotation())
+      toast.success('Última anotación SVG deshecha.');
+    else toast.error('No hay anotaciones que deshacer.');
+  };
+
+  // FIX #3: modal interactivo en lugar de window.prompt + window.confirm
+  const onClearAll = () => {
+    setClearModalOpen(false);
+    odontogramaTools.clearAnnotations();
+    const svg = odontogramaTools.getSvg();
+    if (svg) {
+      svg
+        .querySelectorAll('foreignObject input, foreignObject textarea')
+        .forEach((inp) => {
+          inp.value = '';
+          inp.style.border = '';
+          inp.style.color = '';
+        });
+    }
+    toast.success('Todas las anotaciones han sido borradas.');
+  };
+
+  const onClearOneTooth = (tooth) => {
+    setClearModalOpen(false);
+    const svgCleared = odontogramaTools.clearAnnotationsForTooth(tooth);
+    const inputCleared = clearInputForTooth(tooth);
+    if (svgCleared || inputCleared)
+      toast.success(`Anotaciones del diente ${tooth} borradas.`);
+    else toast.error(`No se encontraron anotaciones para el diente ${tooth}.`);
+  };
+
+  // ====================================================================
+  // ESTILOS INLINE COMPARTIDOS
+  // ====================================================================
+
+  // Botón de tratamiento — ancho completo, teal uniforme
+  const S = {
+    btn: {
+      width: '100%',
+      padding: '8px 10px',
+      background: '#0d9488',
+      color: 'white',
+      border: 'none',
+      borderRadius: 6,
+      fontSize: 13,
+      fontWeight: 500,
+      cursor: 'pointer',
+      textAlign: 'left',
+      lineHeight: 1.3,
+      transition: 'background 0.15s',
+    },
+    // Cabecera de sección
+    sec: {
+      fontSize: 10,
+      fontWeight: 800,
+      letterSpacing: '0.07em',
+      textTransform: 'uppercase',
+      color: '#0f766e',
+      marginTop: 14,
+      marginBottom: 6,
+      paddingBottom: 3,
+      borderBottom: '1px solid #99f6e4',
+    },
+    // Dropdown genérico
+    drop: {
+      position: 'absolute',
+      top: '105%',
+      left: 0,
+      zIndex: 80,
+      background: 'white',
+      border: '1px solid #e5e7eb',
+      borderRadius: 8,
+      padding: 10,
+      boxShadow: '0 8px 24px rgba(0,0,0,0.13)',
+      minWidth: 200,
+    },
+    // Grid 2 columnas
+    grid2: { display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 6 },
+  };
+
+  // ====================================================================
+  // RENDER
+  // ====================================================================
   return (
     <div
-      className="p-4 rounded-lg shadow-lg"
       style={{
-        width: '400px',
+        width: 380,
         background: '#fff',
-        maxHeight: '80vh',
+        borderRadius: 10,
+        boxShadow: '0 2px 12px rgba(0,0,0,0.09)',
+        padding: '14px 14px 18px',
+        maxHeight: '85vh',
         overflowY: 'auto',
+        position: 'relative',
       }}
     >
-      <h3 className="text-xl font-bold mb-2">Tratamientos</h3>
+      {/* ── TÍTULO ─────────────────────────────────────── */}
+      <h3
+        style={{
+          margin: '0 0 10px',
+          fontSize: 16,
+          fontWeight: 800,
+          color: '#134e4a',
+        }}
+      >
+        Herramientas del Odontograma
+      </h3>
 
-      {/* Banner del diente seleccionado por click (Track B) */}
+      {/* ── DIENTE SELECCIONADO ─────────────────────────── */}
       <div
         style={{
           display: 'flex',
           alignItems: 'center',
           gap: 8,
-          padding: '8px 10px',
-          marginBottom: 12,
-          borderRadius: 8,
+          padding: '7px 10px',
+          marginBottom: 10,
+          borderRadius: 7,
           fontSize: 13,
           background: selectedTooth ? '#dbeafe' : '#f3f4f6',
           border: `1px solid ${selectedTooth ? '#93c5fd' : '#e5e7eb'}`,
@@ -997,52 +752,52 @@ export default function OdontogramaToolsPanel({
           </>
         ) : (
           <span style={{ color: '#6b7280' }}>
-            👆 Haz click en un diente del odontograma para seleccionarlo, luego
-            elige un tratamiento.
+            👆 Haz clic en un diente para seleccionarlo
           </span>
         )}
       </div>
 
-      {/* Selector de color activo (NTS-188) — reemplaza los prompts de color */}
+      {/* ── SELECTOR DE COLOR NTS-188 ────────────────────── */}
       <div
         style={{
           display: 'flex',
           alignItems: 'center',
           gap: 8,
-          marginBottom: 12,
+          marginBottom: 4,
         }}
       >
-        <span style={{ fontSize: 13, fontWeight: 600, color: '#374151' }}>
-          Color:
+        <span style={{ fontSize: 11, fontWeight: 700, color: '#374151' }}>
+          Color NTS-188:
         </span>
         {[
-          { val: 'blue', label: 'Azul', hex: '#1d4ed8' },
-          { val: 'red', label: 'Rojo', hex: '#dc2626' },
+          { val: 'blue', label: 'Azul', hex: '#1d4ed8', note: 'buen estado' },
+          { val: 'red', label: 'Rojo', hex: '#dc2626', note: 'mal estado' },
         ].map((c) => {
           const activo = colorActivo === c.val;
           return (
             <button
               key={c.val}
               onClick={() => setColorActivo(c.val)}
+              title={c.note}
               style={{
                 display: 'flex',
                 alignItems: 'center',
-                gap: 6,
-                padding: '5px 12px',
-                borderRadius: 6,
+                gap: 5,
+                padding: '4px 10px',
+                borderRadius: 5,
                 border: activo ? `2px solid ${c.hex}` : '2px solid #e5e7eb',
                 background: activo ? c.hex : 'white',
                 color: activo ? 'white' : '#374151',
-                fontWeight: 600,
-                fontSize: 13,
+                fontWeight: 700,
+                fontSize: 12,
                 cursor: 'pointer',
               }}
             >
               <span
                 style={{
-                  width: 12,
-                  height: 12,
-                  borderRadius: 3,
+                  width: 10,
+                  height: 10,
+                  borderRadius: 2,
                   background: c.hex,
                   border: activo ? '1px solid white' : 'none',
                 }}
@@ -1052,462 +807,73 @@ export default function OdontogramaToolsPanel({
           );
         })}
       </div>
+      <p style={{ margin: '2px 0 0', fontSize: 10, color: '#9ca3af' }}>
+        Azul = buen estado · Rojo = mal estado (NTS N° 188-MINSA/2022)
+      </p>
 
-      <div className="grid grid-cols-1 md:grid-cols-2 gap-2">
-        <button
-          className="px-3 py-2 bg-teal-600 text-white rounded"
-          onClick={onFixedOrtho}
-        >
-          1. Aparato ortodóntico fijo
+      {/* ════════════════════════════════════════════════════
+          1. ORTODONCIA
+      ════════════════════════════════════════════════════ */}
+      <div style={S.sec}>1 · Ortodoncia</div>
+      <div style={S.grid2}>
+        <button style={S.btn} onClick={onFixedOrtho}>
+          Aparat. orto. fijo
         </button>
-
-        <button
-          className="px-3 py-2 bg-teal-600 text-white rounded"
-          onClick={onRemovableOrtho}
-        >
-          2. Aparato ortodóntico removible
+        <button style={S.btn} onClick={onRemovableOrtho}>
+          Aparat. orto. removible
         </button>
+      </div>
 
+      {/* ════════════════════════════════════════════════════
+          2. CORONAS
+      ════════════════════════════════════════════════════ */}
+      <div style={S.sec}>2 · Coronas</div>
+      <div style={S.grid2}>
+        {/* 3. Corona con submenú */}
         <div style={{ position: 'relative' }}>
           <button
-            className="px-3 py-2 bg-teal-600 text-white rounded w-full"
-            onClick={onCoronaButton}
+            style={S.btn}
+            onClick={() => toggleMenu(coronaMenuOpen, setCoronaMenuOpen)}
             aria-expanded={coronaMenuOpen}
           >
-            3. CORONA
+            3. Corona ▾
           </button>
-
           {coronaMenuOpen && (
-            <div
-              style={{
-                position: 'absolute',
-                top: '110%',
-                left: 0,
-                zIndex: 60,
-                background: 'white',
-                border: '1px solid #ddd',
-                padding: 8,
-                display: 'flex',
-                gap: 12,
-                boxShadow: '0 6px 18px rgba(0,0,0,0.08)',
-                width: 320,
-              }}
-            >
-              {colors.map((col) => (
-                <div key={col} style={{ flex: 1 }}>
-                  <div style={{ marginBottom: 6, fontWeight: 600, color: col }}>
-                    {col.toUpperCase()}
-                  </div>
-                  <div style={{ display: 'flex', flexWrap: 'wrap', gap: 6 }}>
-                    {crownTypes.map((t) => (
-                      <button
-                        key={t + col}
-                        onClick={() => onSelectCorona(t, col)}
-                        style={{
-                          padding: '6px 8px',
-                          borderRadius: 6,
-                          border: `2px solid ${col}`,
-                          background: 'white',
-                          cursor: 'pointer',
-                        }}
-                        title={`Aplicar ${t} (${col})`}
-                      >
-                        {t}
-                      </button>
-                    ))}
-                  </div>
-                </div>
-              ))}
-
-              <div
-                style={{
-                  display: 'flex',
-                  flexDirection: 'column',
-                  justifyContent: 'space-between',
-                }}
-              >
-                <button
-                  onClick={() => {
-                    setCoronaMenuOpen(false);
-                  }}
-                  style={{
-                    padding: '6px 8px',
-                    borderRadius: 6,
-                    border: '1px solid #ccc',
-                    background: '#f8f8f8',
-                  }}
-                >
-                  Cerrar
-                </button>
-              </div>
-            </div>
-          )}
-        </div>
-
-        <div style={{ position: 'relative' }}>
-          <button
-            className="px-3 py-2 bg-teal-600 text-white rounded w-full"
-            onClick={onCoronaTempButton}
-          >
-            4. Corona temporal
-          </button>
-        </div>
-
-        <div style={{ position: 'relative' }}>
-          <button
-            className="px-3 py-2 bg-teal-600 text-white rounded w-full"
-            onClick={onDefectButton}
-            aria-expanded={defectMenuOpen}
-          >
-            5. Defectos de desarrollo del esmalte
-          </button>
-
-          {defectMenuOpen && (
-            <div
-              style={{
-                position: 'absolute',
-                top: '110%',
-                left: 0,
-                zIndex: 60,
-                background: 'white',
-                border: '1px solid #ddd',
-                padding: 8,
-                display: 'flex',
-                gap: 12,
-                boxShadow: '0 6px 18px rgba(0,0,0,0.08)',
-                width: 260,
-              }}
-            >
-              <div style={{ flex: 1 }}>
-                <div style={{ marginBottom: 6, fontWeight: 700, color: 'red' }}>
-                  Opciones (texto en rojo)
-                </div>
-                <div
-                  style={{ display: 'flex', flexDirection: 'column', gap: 6 }}
-                >
-                  {defectTypes.map((d) => (
-                    <button
-                      key={d}
-                      onClick={() => onSelectDefect(d)}
-                      style={{
-                        padding: '6px 8px',
-                        borderRadius: 6,
-                        border: '1px solid #ddd',
-                        background: 'white',
-                        cursor: 'pointer',
-                        color: 'red',
-                        fontWeight: 600,
-                      }}
-                      title={`Aplicar defecto ${d}`}
-                    >
-                      {d}
-                    </button>
-                  ))}
-                </div>
-              </div>
-
-              <div
-                style={{
-                  display: 'flex',
-                  flexDirection: 'column',
-                  justifyContent: 'space-between',
-                }}
-              >
-                <button
-                  onClick={() => {
-                    setDefectMenuOpen(false);
-                  }}
-                  style={{
-                    padding: '6px 8px',
-                    borderRadius: 6,
-                    border: '1px solid #ccc',
-                    background: '#f8f8f8',
-                  }}
-                >
-                  Cerrar
-                </button>
-              </div>
-            </div>
-          )}
-        </div>
-
-        {/* EDENTULO: muestra sub-botones SUPERIOR/INFERIOR */}
-        <div style={{ position: 'relative' }}>
-          <button
-            className="px-3 py-2 bg-teal-600 text-white rounded w-full"
-            onClick={onEdentuloButton}
-            aria-expanded={edentuloMenuOpen}
-          >
-            6 Edéntulo
-          </button>
-
-          {edentuloMenuOpen && (
-            <div
-              style={{
-                position: 'absolute',
-                top: '110%',
-                left: 0,
-                zIndex: 60,
-                background: 'white',
-                border: '1px solid #ddd',
-                padding: 8,
-                display: 'flex',
-                gap: 8,
-                boxShadow: '0 6px 18px rgba(21, 87, 220, 0.92)',
-                width: 220,
-              }}
-            >
-              <button
-                onClick={onEdentuloSuperior}
-                style={{
-                  flex: 1,
-                  padding: '6px 8px',
-                  borderRadius: 6,
-                  border: '1px solid #ccc',
-                  background: '#f3f3f3',
-                  cursor: 'pointer',
-                }}
-              >
-                SUPERIOR
-              </button>
-              <button
-                onClick={onEdentuloInferior}
-                style={{
-                  flex: 1,
-                  padding: '6px 8px',
-                  borderRadius: 6,
-                  border: '1px solid #ccc',
-                  background: '#f3f3f3',
-                  cursor: 'pointer',
-                }}
-              >
-                INFERIOR
-              </button>
-            </div>
-          )}
-        </div>
-
-        <button
-          className="px-3 py-2 bg-teal-500 text-white rounded"
-          onClick={onDiastema}
-        >
-          7. Diastema
-        </button>
-
-        <button
-          className="px-3 py-2 bg-teal-600 text-white rounded"
-          onClick={onFractura}
-        >
-          8. Fosas y fisuras profundas
-        </button>
-
-        {/*<button className="px-3 py-2 bg-teal-500 text-black rounded" onClick={onClear}>
-           Fractura dental
-        </button> */}
-
-        <button
-          className="px-3 py-2 bg-teal-700 text-white rounded"
-          onClick={onFusion}
-        >
-          9 Fusión
-        </button>
-
-        <button
-          className="px-3 py-2 bg-teal-500 text-white rounded"
-          onClick={onGerminacion}
-        >
-          10 Germinación
-        </button>
-
-        <div style={{ position: 'relative' }}>
-          <button
-            className="px-3 py-2 bg-teal-500 text-white rounded w-full"
-            onClick={onGiroversionButton}
-            aria-expanded={giroMenuOpen}
-          >
-            11. Giroversión
-          </button>
-
-          {giroMenuOpen && (
-            <div
-              style={{
-                position: 'absolute',
-                top: '110%',
-                left: 0,
-                zIndex: 70,
-                background: 'white',
-                border: '1px solid #ddd',
-                padding: 8,
-                display: 'flex',
-                gap: 8,
-                boxShadow: '0 6px 18px rgba(0,0,0,0.12)',
-                width: 260,
-              }}
-            >
-              <button
-                onClick={() => onGiroversionDirection('right')}
-                style={{
-                  flex: 1,
-                  padding: '8px',
-                  borderRadius: 6,
-                  border: '1px solid #ccc',
-                  background: '#eef',
-                  cursor: 'pointer',
-                  color: 'blue',
-                  fontWeight: 700,
-                }}
-              >
-                Derecha
-              </button>
-              <button
-                onClick={() => onGiroversionDirection('left')}
-                style={{
-                  flex: 1,
-                  padding: '8px',
-                  borderRadius: 6,
-                  border: '1px solid #ccc',
-                  background: '#eef',
-                  cursor: 'pointer',
-                  color: 'blue',
-                  fontWeight: 700,
-                }}
-              >
-                Izquierda
-              </button>
-            </div>
-          )}
-        </div>
-
-        <div style={{ position: 'relative' }}>
-          <button
-            className="px-3 py-2 bg-teal-500 text-white rounded"
-            onClick={onImplanteButton}
-            aria-expanded={implantMenuOpen}
-          >
-            12. Implantación dental
-          </button>
-          {implantMenuOpen && (
-            <div
-              style={{
-                position: 'absolute',
-                top: '110%',
-                left: 0,
-                zIndex: 70,
-                background: 'white',
-                border: '1px solid #ddd',
-                padding: 8,
-                display: 'flex',
-                gap: 8,
-                boxShadow: '0 6px 18px rgba(0,0,0,0.12)',
-                width: 260,
-              }}
-            >
-              <button
-                onClick={() => onImplanteColor('red')}
-                style={{
-                  flex: 1,
-                  padding: '8px',
-                  borderRadius: 6,
-                  border: '1px solid #ccc',
-                  background: '#fee',
-                  cursor: 'pointer',
-                  color: 'red',
-                  fontWeight: 700,
-                }}
-              >
-                IMP
-              </button>
-              <button
-                onClick={() => onImplanteColor('blue')}
-                style={{
-                  flex: 1,
-                  padding: '8px',
-                  borderRadius: 6,
-                  border: '1px solid #ccc',
-                  background: '#eef',
-                  cursor: 'pointer',
-                  color: 'blue',
-                  fontWeight: 700,
-                }}
-              >
-                IMP
-              </button>
-            </div>
-          )}
-        </div>
-        <button
-          className="px-3 py-2 bg-teal-500 text-white rounded"
-          onClick={onImplantacion2}
-        >
-          13. Impactacion
-        </button>
-        {/* <button className="px-3 py-2 bg-teal-500 text-white rounded" onClick={onClear}>
-           Lesión de caries dental
-        </button>*/}
-        <button
-          className="px-3 py-2 bg-teal-500 text-white rounded"
-          onClick={onMacrodoncia}
-        >
-          14. Macrodoncia
-        </button>
-        <button
-          className="px-3 py-2 bg-teal-500 text-white rounded"
-          onClick={onMicrodoncia}
-        >
-          15. MICRODONCIA
-        </button>
-        <button
-          className="px-3 py-2 bg-teal-500 text-white rounded"
-          onClick={onMobilidad}
-        >
-          16. MOVILIDAD PATOLÓGIA
-        </button>
-        <div style={{ position: 'relative' }}>
-          <button
-            className="px-3 py-2 bg-teal-600 text-white rounded w-full"
-            onClick={onPDAButton}
-            aria-expanded={pdaMenuOpen}
-          >
-            17. Piesa dentaria ausente (PDA)
-          </button>
-          {pdaMenuOpen && (
-            <div
-              style={{
-                position: 'absolute',
-                top: '110%',
-                left: 0,
-                zIndex: 60,
-                background: 'white',
-                border: '1px solid #ddd',
-                padding: 8,
-                display: 'flex',
-                gap: 12,
-                boxShadow: '0 6px 18px rgba(0,0,0,0.08)',
-                width: 320,
-              }}
-            >
-              {colors
-                .filter((col) => col === 'blue')
-                .map((col) => (
+            <div style={S.drop}>
+              <div style={{ display: 'flex', gap: 8 }}>
+                {colors.map((col) => (
                   <div key={col} style={{ flex: 1 }}>
                     <div
-                      style={{ marginBottom: 6, fontWeight: 600, color: col }}
+                      style={{
+                        fontSize: 11,
+                        fontWeight: 800,
+                        color: col === 'blue' ? '#1d4ed8' : '#dc2626',
+                        marginBottom: 5,
+                      }}
                     >
-                      {col.toUpperCase()}
+                      {col === 'blue' ? '🔵 Azul' : '🔴 Rojo'}
                     </div>
-                    <div style={{ display: 'flex', flexWrap: 'wrap', gap: 6 }}>
-                      {missingToothTypes.map((t) => (
+                    <div
+                      style={{
+                        display: 'flex',
+                        flexDirection: 'column',
+                        gap: 4,
+                      }}
+                    >
+                      {crownTypes.map((t) => (
                         <button
                           key={t + col}
-                          onClick={() => onSelectPDA(t, col)}
+                          onClick={() => onSelectCorona(t, col)}
                           style={{
-                            padding: '6px 8px',
-                            borderRadius: 6,
-                            border: `2px solid ${col}`,
+                            padding: '5px 6px',
+                            borderRadius: 5,
+                            border: `2px solid ${col === 'blue' ? '#1d4ed8' : '#dc2626'}`,
                             background: 'white',
                             cursor: 'pointer',
+                            fontSize: 13,
+                            fontWeight: 700,
+                            color: col === 'blue' ? '#1d4ed8' : '#dc2626',
                           }}
-                          title={`Aplicar ${t} (${col})`}
                         >
                           {t}
                         </button>
@@ -1515,150 +881,638 @@ export default function OdontogramaToolsPanel({
                     </div>
                   </div>
                 ))}
-
-              <div
+              </div>
+              <button
+                onClick={() => setCoronaMenuOpen(false)}
                 style={{
-                  display: 'flex',
-                  flexDirection: 'column',
-                  justifyContent: 'space-between',
+                  marginTop: 8,
+                  width: '100%',
+                  padding: '4px',
+                  borderRadius: 5,
+                  border: '1px solid #e5e7eb',
+                  background: '#f9fafb',
+                  fontSize: 12,
+                  cursor: 'pointer',
                 }}
               >
-                <button
-                  onClick={() => {
-                    setPDAMenuOpen(false);
-                  }}
-                  style={{
-                    padding: '6px 8px',
-                    borderRadius: 6,
-                    border: '1px solid #ccc',
-                    background: '#f8f8f8',
-                  }}
-                >
-                  Cerrar
-                </button>
-              </div>
+                Cerrar
+              </button>
             </div>
           )}
         </div>
-        <button
-          className="px-3 py-2 bg-teal-500 text-white rounded"
-          onClick={onPiezaClavija}
-        >
-          18. Pieza Dentaria en Clavija (PC)
-        </button>
-        <button
-          className="px-3 py-2 bg-teal-600 text-white rounded"
-          onClick={onPiezaEctopica}
-        >
-          19. Pieza Dentaria Ectópica
-        </button>
-        <button
-          className="px-3 py-2 bg-teal-700 text-white rounded"
-          onClick={onPulpotomia}
-        >
-          20. Pulpotomía
-        </button>
-        <button
-          className="px-3 py-2 bg-teal-600 text-white rounded"
-          onClick={onTransposicion}
-        >
-          21. Transposición dentaria
-        </button>
-        <button
-          className="px-3 py-2 bg-teal-700 text-white rounded"
-          onClick={onPPF}
-        >
-          22. Prótesis Dental Parcial Fija (PPF)
-        </button>
-        <div className="relative">
-          <button
-            className="px-3 py-2 bg-teal-500 text-white rounded"
-            onClick={onPDCButton}
-          >
-            23. Prótesis Dental Completa (PDC)
-          </button>
-          {pdcMenuOpen && (
-            <div className="absolute top-full left-0 mt-1 bg-white border border-gray-300 rounded shadow-lg z-10 p-2">
-              {pdcTypes.map((type) => (
-                <div key={type.id} className="p-1">
-                  <p className="text-sm font-bold mb-1">{type.label}</p>
-                  <div className="flex gap-2">
-                    {colors.map((color) => (
-                      <button
-                        key={color}
-                        className={`text-xs px-2 py-1 rounded border ${
-                          color === 'blue'
-                            ? 'bg-blue-500 text-white'
-                            : 'bg-red-500 text-white'
-                        }`}
-                        onClick={() => onSelectPDC(type.id, color)}
-                      >
-                        {color.charAt(0).toUpperCase()}
-                      </button>
-                    ))}
-                  </div>
-                </div>
-              ))}
-            </div>
-          )}
-        </div>
-        <button
-          className="px-3 py-2 bg-teal-600 text-white rounded"
-          onClick={onProtesisPR}
-        >
-          24. Protesis dental parcial removible (PPR)
+
+        {/* 4. Corona temporal — siempre rojo (deciduos) */}
+        <button style={S.btn} onClick={onCoronaTemporal}>
+          4. Corona temporal (CT)
         </button>
       </div>
 
+      {/* ════════════════════════════════════════════════════
+          3. ESTADO DENTAL
+      ════════════════════════════════════════════════════ */}
+      <div style={S.sec}>3 · Estado dental</div>
+      <div style={S.grid2}>
+        {/* 5. Defectos esmalte */}
+        <div style={{ position: 'relative' }}>
+          <button
+            style={S.btn}
+            onClick={() => toggleMenu(defectMenuOpen, setDefectMenuOpen)}
+            aria-expanded={defectMenuOpen}
+          >
+            5. Defectos esmalte ▾
+          </button>
+          {defectMenuOpen && (
+            <div style={S.drop}>
+              <div
+                style={{
+                  fontSize: 11,
+                  fontWeight: 700,
+                  color: '#dc2626',
+                  marginBottom: 6,
+                }}
+              >
+                Tipo (rojo)
+              </div>
+              <div style={{ display: 'flex', flexDirection: 'column', gap: 5 }}>
+                {defectTypes.map((d) => (
+                  <button
+                    key={d}
+                    onClick={() => onSelectDefect(d)}
+                    style={{
+                      padding: '6px 8px',
+                      borderRadius: 5,
+                      border: '1px solid #fca5a5',
+                      background: '#fff5f5',
+                      cursor: 'pointer',
+                      fontSize: 13,
+                      fontWeight: 700,
+                      color: '#dc2626',
+                    }}
+                  >
+                    {d}
+                  </button>
+                ))}
+              </div>
+              <button
+                onClick={() => setDefectMenuOpen(false)}
+                style={{
+                  marginTop: 8,
+                  width: '100%',
+                  padding: '4px',
+                  borderRadius: 5,
+                  border: '1px solid #e5e7eb',
+                  background: '#f9fafb',
+                  fontSize: 12,
+                  cursor: 'pointer',
+                }}
+              >
+                Cerrar
+              </button>
+            </div>
+          )}
+        </div>
+
+        {/* 6. Edéntulo */}
+        <div style={{ position: 'relative' }}>
+          <button
+            style={S.btn}
+            onClick={() => toggleMenu(edentuloMenuOpen, setEdentuloMenuOpen)}
+            aria-expanded={edentuloMenuOpen}
+          >
+            6. Edéntulo ▾
+          </button>
+          {edentuloMenuOpen && (
+            <div style={{ ...S.drop, display: 'flex', gap: 6 }}>
+              <button
+                onClick={onEdentuloSuperior}
+                style={{
+                  flex: 1,
+                  padding: '8px',
+                  borderRadius: 6,
+                  border: '1px solid #0d9488',
+                  background: '#f0fdfa',
+                  cursor: 'pointer',
+                  fontSize: 12,
+                  fontWeight: 700,
+                  color: '#0f766e',
+                }}
+              >
+                Superior
+              </button>
+              <button
+                onClick={onEdentuloInferior}
+                style={{
+                  flex: 1,
+                  padding: '8px',
+                  borderRadius: 6,
+                  border: '1px solid #0d9488',
+                  background: '#f0fdfa',
+                  cursor: 'pointer',
+                  fontSize: 12,
+                  fontWeight: 700,
+                  color: '#0f766e',
+                }}
+              >
+                Inferior
+              </button>
+            </div>
+          )}
+        </div>
+
+        <button style={S.btn} onClick={onFosasFisurasProfundas}>
+          8. Fosas y fisuras (FFP)
+        </button>
+
+        {/* 12. Implantación dental */}
+        <div style={{ position: 'relative' }}>
+          <button
+            style={S.btn}
+            onClick={() => toggleMenu(implantMenuOpen, setImplantMenuOpen)}
+            aria-expanded={implantMenuOpen}
+          >
+            12. Implantación ▾
+          </button>
+          {implantMenuOpen && (
+            <div style={{ ...S.drop, display: 'flex', gap: 8 }}>
+              <button
+                onClick={() => onImplanteColor('blue')}
+                style={{
+                  flex: 1,
+                  padding: '8px',
+                  borderRadius: 6,
+                  border: '2px solid #1d4ed8',
+                  background: '#eff6ff',
+                  cursor: 'pointer',
+                  color: '#1d4ed8',
+                  fontWeight: 700,
+                  fontSize: 13,
+                }}
+              >
+                IMP 🔵
+              </button>
+              <button
+                onClick={() => onImplanteColor('red')}
+                style={{
+                  flex: 1,
+                  padding: '8px',
+                  borderRadius: 6,
+                  border: '2px solid #dc2626',
+                  background: '#fff5f5',
+                  cursor: 'pointer',
+                  color: '#dc2626',
+                  fontWeight: 700,
+                  fontSize: 13,
+                }}
+              >
+                IMP 🔴
+              </button>
+            </div>
+          )}
+        </div>
+
+        <button style={S.btn} onClick={onImplantacion2}>
+          13. Impactación (I)
+        </button>
+        <button style={S.btn} onClick={onMobilidad}>
+          16. Movilidad patológica
+        </button>
+
+        {/* 17. Pieza dentaria ausente */}
+        <div style={{ position: 'relative' }}>
+          <button
+            style={S.btn}
+            onClick={() => toggleMenu(pdaMenuOpen, setPDAMenuOpen)}
+            aria-expanded={pdaMenuOpen}
+          >
+            17. Pieza ausente (PDA) ▾
+          </button>
+          {pdaMenuOpen && (
+            <div style={S.drop}>
+              <div
+                style={{
+                  fontSize: 11,
+                  fontWeight: 700,
+                  color: '#1d4ed8',
+                  marginBottom: 6,
+                }}
+              >
+                Tipo (azul)
+              </div>
+              <div style={{ display: 'flex', gap: 6 }}>
+                {missingToothTypes.map((t) => (
+                  <button
+                    key={t}
+                    onClick={() => onSelectPDA(t, 'blue')}
+                    style={{
+                      flex: 1,
+                      padding: '7px 4px',
+                      borderRadius: 5,
+                      border: '2px solid #1d4ed8',
+                      background: '#eff6ff',
+                      cursor: 'pointer',
+                      fontSize: 13,
+                      fontWeight: 700,
+                      color: '#1d4ed8',
+                    }}
+                  >
+                    {t}
+                  </button>
+                ))}
+              </div>
+              <button
+                onClick={() => setPDAMenuOpen(false)}
+                style={{
+                  marginTop: 8,
+                  width: '100%',
+                  padding: '4px',
+                  borderRadius: 5,
+                  border: '1px solid #e5e7eb',
+                  background: '#f9fafb',
+                  fontSize: 12,
+                  cursor: 'pointer',
+                }}
+              >
+                Cerrar
+              </button>
+            </div>
+          )}
+        </div>
+
+        <button style={S.btn} onClick={onPulpotomia}>
+          20. Pulpotomía (PP)
+        </button>
+      </div>
+
+      {/* ════════════════════════════════════════════════════
+          4. ANOMALÍAS MORFOLÓGICAS
+      ════════════════════════════════════════════════════ */}
+      <div style={S.sec}>4 · Anomalías morfológicas</div>
+      <div style={S.grid2}>
+        <button style={S.btn} onClick={onFusion}>
+          9. Fusión
+        </button>
+        <button style={S.btn} onClick={onGerminacion}>
+          10. Germinación
+        </button>
+        <button style={S.btn} onClick={onMacrodoncia}>
+          14. Macrodoncia
+        </button>
+        <button style={S.btn} onClick={onMicrodoncia}>
+          15. Microdoncia
+        </button>
+        <button
+          style={{ ...S.btn, gridColumn: 'span 2' }}
+          onClick={onPiezaClavija}
+        >
+          18. Pieza en clavija (PC)
+        </button>
+      </div>
+
+      {/* ════════════════════════════════════════════════════
+          5. POSICIÓN DENTAL
+      ════════════════════════════════════════════════════ */}
+      <div style={S.sec}>5 · Posición dental</div>
+      <div style={S.grid2}>
+        <button style={S.btn} onClick={onDiastema}>
+          7. Diastema
+        </button>
+
+        {/* 11. Giroversión */}
+        <div style={{ position: 'relative' }}>
+          <button
+            style={S.btn}
+            onClick={() => toggleMenu(giroMenuOpen, setGiroMenuOpen)}
+            aria-expanded={giroMenuOpen}
+          >
+            11. Giroversión ▾
+          </button>
+          {giroMenuOpen && (
+            <div style={{ ...S.drop, display: 'flex', gap: 8 }}>
+              <button
+                onClick={() => onGiroversionDirection('left')}
+                style={{
+                  flex: 1,
+                  padding: '8px',
+                  borderRadius: 6,
+                  border: '1px solid #1d4ed8',
+                  background: '#eff6ff',
+                  cursor: 'pointer',
+                  color: '#1d4ed8',
+                  fontWeight: 700,
+                }}
+              >
+                ← Izquierda
+              </button>
+              <button
+                onClick={() => onGiroversionDirection('right')}
+                style={{
+                  flex: 1,
+                  padding: '8px',
+                  borderRadius: 6,
+                  border: '1px solid #1d4ed8',
+                  background: '#eff6ff',
+                  cursor: 'pointer',
+                  color: '#1d4ed8',
+                  fontWeight: 700,
+                }}
+              >
+                Derecha →
+              </button>
+            </div>
+          )}
+        </div>
+
+        <button style={S.btn} onClick={onPiezaEctopica}>
+          19. Pieza ectópica (E)
+        </button>
+        <button style={S.btn} onClick={onTransposicion}>
+          21. Transposición
+        </button>
+      </div>
+
+      {/* ════════════════════════════════════════════════════
+          6. PRÓTESIS
+      ════════════════════════════════════════════════════ */}
+      <div style={S.sec}>6 · Prótesis</div>
+      <div style={S.grid2}>
+        <button style={S.btn} onClick={onPPF}>
+          22. PPF
+        </button>
+
+        {/* 23. PDC */}
+        <div style={{ position: 'relative' }}>
+          <button
+            style={S.btn}
+            onClick={() => toggleMenu(pdcMenuOpen, setPDCMenuOpen)}
+            aria-expanded={pdcMenuOpen}
+          >
+            23. PDC ▾
+          </button>
+          {pdcMenuOpen && (
+            <div style={S.drop}>
+              {pdcTypes.map((type) => (
+                <div key={type.id} style={{ marginBottom: 8 }}>
+                  <div
+                    style={{
+                      fontSize: 11,
+                      fontWeight: 700,
+                      color: '#374151',
+                      marginBottom: 4,
+                    }}
+                  >
+                    {type.label}
+                  </div>
+                  <div style={{ display: 'flex', gap: 6 }}>
+                    <button
+                      onClick={() => onSelectPDC(type.id, 'blue')}
+                      style={{
+                        flex: 1,
+                        padding: '5px',
+                        borderRadius: 5,
+                        border: '2px solid #1d4ed8',
+                        background: '#eff6ff',
+                        cursor: 'pointer',
+                        color: '#1d4ed8',
+                        fontWeight: 700,
+                        fontSize: 12,
+                      }}
+                    >
+                      Azul
+                    </button>
+                    <button
+                      onClick={() => onSelectPDC(type.id, 'red')}
+                      style={{
+                        flex: 1,
+                        padding: '5px',
+                        borderRadius: 5,
+                        border: '2px solid #dc2626',
+                        background: '#fff5f5',
+                        cursor: 'pointer',
+                        color: '#dc2626',
+                        fontWeight: 700,
+                        fontSize: 12,
+                      }}
+                    >
+                      Rojo
+                    </button>
+                  </div>
+                </div>
+              ))}
+              <button
+                onClick={() => setPDCMenuOpen(false)}
+                style={{
+                  width: '100%',
+                  padding: '4px',
+                  borderRadius: 5,
+                  border: '1px solid #e5e7eb',
+                  background: '#f9fafb',
+                  fontSize: 12,
+                  cursor: 'pointer',
+                }}
+              >
+                Cerrar
+              </button>
+            </div>
+          )}
+        </div>
+
+        <button
+          style={{ ...S.btn, gridColumn: 'span 2' }}
+          onClick={onProtesisPR}
+        >
+          24. Prótesis Parcial Removible (PPR)
+        </button>
+      </div>
+
+      {/* ── MODO ACTIVO ──────────────────────────────────── */}
       {activeTool && (
-        <div style={{ marginTop: 12, display: 'flex', gap: 8 }}>
-          <div style={{ flex: 1 }}>
-            <strong>Modo activo:</strong> {activeToolName || 'Interactivo'}
-          </div>
+        <div
+          style={{
+            marginTop: 14,
+            display: 'flex',
+            alignItems: 'center',
+            gap: 8,
+            padding: '9px 12px',
+            background: '#fef9c3',
+            borderRadius: 7,
+            border: '1px solid #fde047',
+          }}
+        >
+          <span style={{ flex: 1, fontSize: 13, color: '#713f12' }}>
+            ✏️ Modo activo: <strong>{activeToolName}</strong>
+          </span>
           <button
             onClick={stopActiveTool}
             style={{
-              padding: '6px 8px',
-              borderRadius: 6,
-              border: '1px solid #ccc',
-              background: '#f3f3f3',
+              padding: '5px 12px',
+              borderRadius: 5,
+              border: '1px solid #f59e0b',
+              background: '#fffbeb',
+              cursor: 'pointer',
+              fontSize: 12,
+              fontWeight: 700,
+              color: '#92400e',
             }}
           >
-            Detener mod
+            Detener
           </button>
         </div>
       )}
 
-      <div className="flex flex-col space-y-3 mt-5">
+      {/* ── UTILIDADES ───────────────────────────────────── */}
+      <div style={{ ...S.sec, marginTop: 16 }}>Utilidades</div>
+      <div style={S.grid2}>
         <button
-          className="px-3 py-2 bg-red-600 text-white rounded font-bold"
-          onClick={onClear}
-        >
-          Borrar 🗑️
-        </button>
-
-        <button
-          className="px-3 py-2 bg-gray-500 text-white rounded font-bold"
           onClick={onUndo}
-          title="Deshace la última anotación SVG"
+          style={{
+            padding: '8px',
+            borderRadius: 6,
+            border: '1px solid #d1d5db',
+            background: '#f9fafb',
+            cursor: 'pointer',
+            fontSize: 13,
+            fontWeight: 600,
+            color: '#374151',
+          }}
         >
-          Deshacer 🔄
+          ↩ Deshacer
         </button>
-
         <button
-          className="px-3 py-2 bg-blue-700 text-white rounded font-bold"
+          onClick={() => setClearModalOpen(true)}
+          style={{
+            padding: '8px',
+            borderRadius: 6,
+            border: '1px solid #fca5a5',
+            background: '#fff5f5',
+            cursor: 'pointer',
+            fontSize: 13,
+            fontWeight: 700,
+            color: '#dc2626',
+          }}
+        >
+          🗑 Borrar
+        </button>
+        <button
           onClick={onLoadVersion}
+          style={{
+            padding: '8px',
+            borderRadius: 6,
+            border: '1px solid #93c5fd',
+            background: '#eff6ff',
+            cursor: 'pointer',
+            fontSize: 13,
+            fontWeight: 600,
+            color: '#1d4ed8',
+          }}
         >
-          Historial de versiones
+          📋 Historial
         </button>
-
         <button
-          className="px-3 py-2 bg-blue-900 text-white rounded font-bold"
           onClick={onSaveVersion}
+          style={{
+            padding: '8px',
+            borderRadius: 6,
+            border: 'none',
+            background: '#1d4ed8',
+            cursor: 'pointer',
+            fontSize: 13,
+            fontWeight: 700,
+            color: 'white',
+          }}
         >
-          Guardar cambios
+          💾 Guardar
         </button>
       </div>
+
+      {/* ── MODAL DE BORRADO (FIX #3 — reemplaza window.prompt/confirm) ── */}
+      {clearModalOpen && (
+        <div
+          style={{
+            position: 'fixed',
+            inset: 0,
+            zIndex: 200,
+            background: 'rgba(0,0,0,0.38)',
+            display: 'flex',
+            alignItems: 'center',
+            justifyContent: 'center',
+          }}
+        >
+          <div
+            style={{
+              background: 'white',
+              borderRadius: 12,
+              padding: 24,
+              width: 320,
+              boxShadow: '0 20px 60px rgba(0,0,0,0.22)',
+            }}
+          >
+            <h4
+              style={{
+                margin: '0 0 4px',
+                fontSize: 16,
+                fontWeight: 800,
+                color: '#111827',
+              }}
+            >
+              ¿Qué deseas borrar?
+            </h4>
+            <p style={{ margin: '0 0 16px', fontSize: 12, color: '#6b7280' }}>
+              Esta acción no se puede deshacer.
+            </p>
+            <div style={{ display: 'flex', flexDirection: 'column', gap: 8 }}>
+              {selectedTooth && (
+                <button
+                  onClick={() => onClearOneTooth(selectedTooth)}
+                  style={{
+                    padding: '11px',
+                    borderRadius: 7,
+                    textAlign: 'left',
+                    border: '2px solid #f59e0b',
+                    background: '#fffbeb',
+                    cursor: 'pointer',
+                    fontSize: 14,
+                    fontWeight: 700,
+                    color: '#92400e',
+                  }}
+                >
+                  🗑 Borrar diente <strong>{selectedTooth}</strong>
+                </button>
+              )}
+              <button
+                onClick={onClearAll}
+                style={{
+                  padding: '11px',
+                  borderRadius: 7,
+                  textAlign: 'left',
+                  border: '2px solid #dc2626',
+                  background: '#fff5f5',
+                  cursor: 'pointer',
+                  fontSize: 14,
+                  fontWeight: 700,
+                  color: '#dc2626',
+                }}
+              >
+                🗑 Borrar TODO el odontograma
+              </button>
+              <button
+                onClick={() => setClearModalOpen(false)}
+                style={{
+                  padding: '11px',
+                  borderRadius: 7,
+                  border: '1px solid #e5e7eb',
+                  background: '#f9fafb',
+                  cursor: 'pointer',
+                  fontSize: 14,
+                  fontWeight: 600,
+                  color: '#374151',
+                }}
+              >
+                Cancelar
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
     </div>
   );
 }
