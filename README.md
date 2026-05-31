@@ -315,11 +315,15 @@ varios tratamientos a la vez** (p.ej. caries en oclusal + obturación en mesial)
 estados de diente completo (corona, ausente, implante, movilidad…). Color **azul =
 buen estado / tratamiento realizado**; **rojo = mal estado / patología**.
 
-**Reglas de exclusión clínica** (v1, ver ADR-0020): una pieza marcada como **AUSENTE**
-(PDA: DNE/DEX/DAO) no admite otros tratamientos en el mismo odontograma (se bloquea);
-marcar ausente una pieza que ya tiene registros se permite con advertencia (válido en
-evolución). Trabajo futuro: trasladar las reglas al dominio del backend y cerrar la
-nomenclatura a la lista oficial.
+**Reglas de exclusión clínica** (ver ADR-0020/0021/0022/0024): una pieza marcada como
+**AUSENTE** (PDA: DNE/DEX/DAO) no admite otros tratamientos en el mismo odontograma (se
+bloquea); marcar ausente una pieza que ya tiene registros se permite con advertencia
+(válido en evolución). Además, una **matriz de exclusión mutua** impide combinaciones
+contradictorias en la misma pieza y tipo: tamaño (macrodoncia vs microdoncia),
+giroversión (derecha vs izquierda), corona total (un solo tipo) y **doble formación
+(fusión vs germinación)**. Las reglas viven en el dominio del backend (responde 409) con
+espejo en el cliente para UX inmediata. Combinaciones legítimas por superficie (p.ej.
+caries + obturación) no se bloquean.
 
 ---
 
