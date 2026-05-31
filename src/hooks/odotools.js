@@ -27,6 +27,23 @@ function transformPointWithCTM(svg, ctm, x, y) {
   return { x: p.x, y: p.y };
 }
 
+// Devuelve la matriz que transforma coordenadas locales del elemento
+// al espacio de usuario del SVG (coordenadas viewBox), no a píxeles CSS.
+// getCTM() da píxeles CSS; aquí componemos getScreenCTM del elemento con
+// el inverso del getScreenCTM del SVG para obtener unidades viewBox correctas.
+function getElementToSvgMatrix(el, svg) {
+  try {
+    const elemScreen = el.getScreenCTM ? el.getScreenCTM() : null;
+    const svgScreen = svg.getScreenCTM ? svg.getScreenCTM() : null;
+    if (elemScreen && svgScreen && typeof svgScreen.inverse === 'function') {
+      return svgScreen.inverse().multiply(elemScreen);
+    }
+  } catch {
+    /* ignore */
+  }
+  return el.getCTM ? el.getCTM() : null;
+}
+
 function parsePointsAttr(pointsAttr) {
   if (!pointsAttr) return [];
   const nums = pointsAttr.match(/-?(?:\d+|\d*\.\d+)(?:e[+-]?\d+)?/gi);
@@ -41,7 +58,7 @@ function elementToSvgPoints(el, svg, samplePathSegments = 24) {
   const pts = [];
   if (!el || !svg) return pts;
   const tag = (el.tagName || '').toLowerCase();
-  const ctm = el.getCTM ? el.getCTM() : null;
+  const ctm = getElementToSvgMatrix(el, svg);
   try {
     if (tag === 'polygon' || tag === 'polyline') {
       const entries = parsePointsAttr(el.getAttribute('points') || '');
@@ -270,7 +287,7 @@ function getToothBBox(svg, toothDataName) {
       };
     }
     const local = el.getBBox();
-    const ctm = el.getCTM();
+    const ctm = getElementToSvgMatrix(el, getSvg());
     if (!ctm)
       return {
         bbox: {
