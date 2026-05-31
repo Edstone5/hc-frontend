@@ -269,6 +269,29 @@ function getToothGroup(svg, toothDataName) {
   return svg.querySelector(`[data-name="${toothDataName}"]`);
 }
 
+// Devuelve el <input>/<textarea> asociado a un diente de forma DETERMINISTA.
+// En el SVG cada diente va seguido en el DOM por su <text> y su <foreignObject>
+// (p.ej. tooth_7_3 → text → input34). Mapear por orden del DOM evita el bug en
+// que el matcher geométrico escribía la sigla en el diente equivocado (7.3→3.8),
+// porque el bbox de un diente deciduo podía quedar más cerca del input de otro
+// diente. Devuelve null si no se encuentra (el llamador puede recurrir a otra vía).
+function inputForToothDOM(svg, toothDataName) {
+  const group = svg.querySelector(`.tooth-group[data-name="${toothDataName}"]`);
+  if (!group) return null;
+  let sib = group.nextElementSibling;
+  let saltos = 0;
+  while (sib && saltos < 4) {
+    if (sib.classList && sib.classList.contains('tooth-group')) break; // siguiente diente
+    if ((sib.tagName || '').toLowerCase() === 'foreignobject') {
+      const input = sib.querySelector('input, textarea');
+      if (input) return input;
+    }
+    sib = sib.nextElementSibling;
+    saltos++;
+  }
+  return null;
+}
+
 function getToothBBox(svg, toothDataName) {
   const el = getToothGroup(svg, toothDataName);
   if (!el) return null;
@@ -345,6 +368,44 @@ function findToothGroupFromEvent(target) {
     return element;
   }
   return null;
+}
+
+// Devuelve el .tooth-group cuyo centro (en coordenadas de PANTALLA) está más
+// cerca del punto de clic. El relleno de los dientes es transparente, por lo
+// que clicar "dentro" de un diente normalmente cae en el fondo del SVG y
+// findToothGroupFromEvent devuelve null. Este helper hace que los modos
+// interactivos (PPF, PPR, transposición) sean tan tolerantes como la selección
+// por clic del odontograma. Umbral 120px para evitar selecciones lejanas.
+function nearestToothGroup(svg, clientX, clientY, maxDist = 120) {
+  if (!svg) return null;
+  const grupos = svg.querySelectorAll('.tooth-group[data-name]');
+  let best = null;
+  let bestDist = Infinity;
+  grupos.forEach((g) => {
+    let rect;
+    try {
+      rect = g.getBoundingClientRect();
+    } catch {
+      return;
+    }
+    if (!rect || (rect.width === 0 && rect.height === 0)) return;
+    const cx = rect.left + rect.width / 2;
+    const cy = rect.top + rect.height / 2;
+    const d = Math.hypot(cx - clientX, cy - clientY);
+    if (d < bestDist) {
+      bestDist = d;
+      best = g;
+    }
+  });
+  return best && bestDist <= maxDist ? best : null;
+}
+
+// Combina el clic directo (sobre el trazo) con el diente más cercano.
+function toothGroupFromEventRobust(svg, e) {
+  return (
+    findToothGroupFromEvent(e.target) ||
+    nearestToothGroup(svg, e.clientX, e.clientY)
+  );
 }
 
 function ensureArrowMarker(svg, color, idPrefix) {
@@ -712,61 +773,15 @@ export function addCrown(
     }
   }
 
-  // Lógica para escribir el crownType en el input (MANTENER ORIGINAL)
+  // Escribir el crownType en el input del diente (mapeo determinista por DOM,
+  // ver inputForToothDOM). Antes usaba el input geométricamente más cercano, lo
+  // que escribía la sigla en el diente equivocado para deciduos (p.ej. 7.3→3.8).
   try {
-    const info = getToothBBox(svg, toothDataName);
-    const bbox = info ? info.bbox : null;
-    if (bbox) {
-      const cx = bbox.x + bbox.width / 2;
-      const cy = bbox.y + bbox.height / 2;
-      const inputs = Array.from(svg.querySelectorAll('foreignObject'));
-      let best = null;
-      let bestDist = Infinity;
-      function foCenterInSvg(fo) {
-        try {
-          const foBox = fo.getBBox();
-          const foCTM = fo.getCTM ? fo.getCTM() : null;
-          if (foCTM) {
-            const pt = svg.createSVGPoint();
-            pt.x = foBox.x + foBox.width / 2;
-            pt.y = foBox.y + foBox.height / 2;
-            return pt.matrixTransform(foCTM);
-          }
-          return {
-            x: foBox.x + foBox.width / 2,
-            y: foBox.y + foBox.height / 2,
-          };
-        } catch {
-          try {
-            const rect = fo.getBoundingClientRect();
-            const pt = svg.createSVGPoint();
-            pt.x = rect.left + rect.width / 2;
-            pt.y = rect.top + rect.height / 2;
-            const screenCTM = svg.getScreenCTM();
-            if (!screenCTM) return null;
-            const inv = screenCTM.inverse();
-            return pt.matrixTransform(inv);
-          } catch {
-            return null;
-          }
-        }
-      }
-      for (const fo of inputs) {
-        const c = foCenterInSvg(fo);
-        if (!c) continue;
-        const d = Math.hypot(c.x - cx, c.y - cy);
-        if (d < bestDist) {
-          bestDist = d;
-          best = fo;
-        }
-      }
-      if (best) {
-        const input = best.querySelector('input, textarea');
-        if (input) {
-          input.value = crownType;
-          input.style.border = `2px solid ${color}`;
-        }
-      }
+    const input = inputForToothDOM(svg, toothDataName);
+    if (input) {
+      input.value = crownType;
+      input.style.border = `2px solid ${color}`;
+      input.style.color = color;
     }
   } catch {
     /* ignore */
@@ -1017,12 +1032,14 @@ export function startDiastemaMode(
 }
 
 // startFixedOrthoMode and startRemovableOrthoMode are kept (simple implementations)
-export function startFixedOrthoMode(color = 'blue') {
+export function startFixedOrthoMode(color = 'blue', onEnd) {
   const svg = getSvg();
   if (!svg) return { stop() {} };
   const overlay = ensureOverlay(svg);
   const pts = [];
   const markers = [];
+  let drew = false;
+  let ended = false;
   function clientToSvgPoint(cx, cy) {
     const pt = svg.createSVGPoint();
     pt.x = cx;
@@ -1050,7 +1067,10 @@ export function startFixedOrthoMode(color = 'blue') {
       l.setAttribute('y2', pts[1].y);
       l.setAttribute('stroke', color);
       l.setAttribute('stroke-width', '4');
+      l.setAttribute('class', 'annotation ortho-fijo');
+      l.setAttribute('data-id', `ortho-fijo-${Date.now()}`);
       overlay.appendChild(l);
+      drew = true;
       cleanup();
     }
   }
@@ -1061,6 +1081,10 @@ export function startFixedOrthoMode(color = 'blue') {
     svg.removeEventListener('click', onClick);
     window.removeEventListener('keydown', onKey);
     markers.forEach((m) => m.remove());
+    if (!ended) {
+      ended = true;
+      if (typeof onEnd === 'function') onEnd(drew);
+    }
   }
   svg.addEventListener('click', onClick);
   window.addEventListener('keydown', onKey);
@@ -1070,13 +1094,16 @@ export function startFixedOrthoMode(color = 'blue') {
 export function startRemovableOrthoMode(
   color = 'blue',
   steps = 10,
-  amplitude = 10
+  amplitude = 10,
+  onEnd
 ) {
   const svg = getSvg();
   if (!svg) return { stop() {} };
   const overlay = ensureOverlay(svg);
   const points = [];
   const markers = [];
+  let drew = false;
+  let ended = false;
   function clientToSvgPoint(cx, cy) {
     const pt = svg.createSVGPoint();
     pt.x = cx;
@@ -1120,7 +1147,10 @@ export function startRemovableOrthoMode(
       poly.setAttribute('stroke', color);
       poly.setAttribute('stroke-width', '3');
       poly.setAttribute('fill', 'none');
+      poly.setAttribute('class', 'annotation ortho-removible');
+      poly.setAttribute('data-id', `ortho-removible-${Date.now()}`);
       overlay.appendChild(poly);
+      drew = true;
       cleanup();
     }
   }
@@ -1131,6 +1161,10 @@ export function startRemovableOrthoMode(
     svg.removeEventListener('click', onClick);
     window.removeEventListener('keydown', onKey);
     markers.forEach((m) => m.remove());
+    if (!ended) {
+      ended = true;
+      if (typeof onEnd === 'function') onEnd(drew);
+    }
   }
   svg.addEventListener('click', onClick);
   window.addEventListener('keydown', onKey);
@@ -1274,100 +1308,12 @@ export function addFosasFisurasProfundas(toothDataName, color = 'blue') {
       y: bbox.y + bbox.height / 2,
     };
 
-    // Helper: compute foreignObject bounding box in SVG coords (best-effort)
-    function foreignObjectBBoxInSvg(fo) {
-      try {
-        const foBox = fo.getBBox();
-        const foCTM = fo.getCTM ? fo.getCTM() : null;
-        if (foCTM) {
-          const pt1 = svg.createSVGPoint();
-          pt1.x = foBox.x;
-          pt1.y = foBox.y;
-          const pt2 = svg.createSVGPoint();
-          pt2.x = foBox.x + foBox.width;
-          pt2.y = foBox.y + foBox.height;
-          const t1 = pt1.matrixTransform(foCTM);
-          const t2 = pt2.matrixTransform(foCTM);
-          const minX = Math.min(t1.x, t2.x);
-          const minY = Math.min(t1.y, t2.y);
-          const maxX = Math.max(t1.x, t2.x);
-          const maxY = Math.max(t1.y, t2.y);
-          return { x: minX, y: minY, width: maxX - minX, height: maxY - minY };
-        }
-      } catch {
-        /* fallback below */
-      }
-
-      try {
-        const rect = fo.getBoundingClientRect();
-        const screenCTM = svg.getScreenCTM();
-        if (!screenCTM) return null;
-        const inv = screenCTM.inverse();
-        const pTL = svg.createSVGPoint();
-        pTL.x = rect.left;
-        pTL.y = rect.top;
-        const pBR = svg.createSVGPoint();
-        pBR.x = rect.right;
-        pBR.y = rect.bottom;
-        const tTL = pTL.matrixTransform(inv);
-        const tBR = pBR.matrixTransform(inv);
-        const minX = Math.min(tTL.x, tBR.x);
-        const minY = Math.min(tTL.y, tBR.y);
-        const maxX = Math.max(tTL.x, tBR.x);
-        const maxY = Math.max(tTL.y, tBR.y);
-        return { x: minX, y: minY, width: maxX - minX, height: maxY - minY };
-      } catch {
-        return null;
-      }
-    }
-
-    function rectIntersectionArea(a, b) {
-      const x1 = Math.max(a.x, b.x);
-      const y1 = Math.max(a.y, b.y);
-      const x2 = Math.min(a.x + a.width, b.x + b.width);
-      const y2 = Math.min(a.y + a.height, b.y + b.height);
-      if (x2 <= x1 || y2 <= y1) return 0;
-      return (x2 - x1) * (y2 - y1);
-    }
-
-    // choose the best foreignObject to write into
-    const fObjects = Array.from(svg.querySelectorAll('foreignObject'));
-    let bestFo = null;
-    let bestOverlap = -1;
-    let bestByDist = null;
-    let bestDist = Infinity;
-
-    for (const fo of fObjects) {
-      const foBox = foreignObjectBBoxInSvg(fo);
-      if (!foBox) continue;
-      const overlap = rectIntersectionArea(foBox, bbox);
-      if (overlap > bestOverlap) {
-        bestOverlap = overlap;
-        bestFo = fo;
-      }
-      const foCenter = {
-        x: foBox.x + foBox.width / 2,
-        y: foBox.y + foBox.height / 2,
-      };
-      const dist = Math.hypot(
-        foCenter.x - toothCenter.x,
-        foCenter.y - toothCenter.y
-      );
-      if (dist < bestDist) {
-        bestDist = dist;
-        bestByDist = fo;
-      }
-    }
-
-    const chosenFo = bestOverlap > 0 ? bestFo : bestByDist || bestFo;
-
-    if (chosenFo) {
-      const input = chosenFo.querySelector('input, textarea');
-      if (input) {
-        input.value = 'FFP';
-        input.style.border = `2px solid ${color}`;
-        input.style.color = color;
-      }
+    // Escribir "FFP" en el input del diente (mapeo determinista por DOM).
+    const input = inputForToothDOM(svg, toothDataName);
+    if (input) {
+      input.value = 'FFP';
+      input.style.border = `2px solid ${color}`;
+      input.style.color = color;
     }
 
     // draw a visible "FFP" label on the overlay near the center of the tooth
@@ -1414,100 +1360,12 @@ export function addImplant(toothDataName, color = 'red') {
       y: bbox.y + bbox.height / 2,
     };
 
-    // Helper: compute foreignObject bounding box in SVG coords (best-effort)
-    function foreignObjectBBoxInSvg(fo) {
-      try {
-        const foBox = fo.getBBox();
-        const foCTM = fo.getCTM ? fo.getCTM() : null;
-        if (foCTM) {
-          const pt1 = svg.createSVGPoint();
-          pt1.x = foBox.x;
-          pt1.y = foBox.y;
-          const pt2 = svg.createSVGPoint();
-          pt2.x = foBox.x + foBox.width;
-          pt2.y = foBox.y + foBox.height;
-          const t1 = pt1.matrixTransform(foCTM);
-          const t2 = pt2.matrixTransform(foCTM);
-          const minX = Math.min(t1.x, t2.x);
-          const minY = Math.min(t1.y, t2.y);
-          const maxX = Math.max(t1.x, t2.x);
-          const maxY = Math.max(t1.y, t2.y);
-          return { x: minX, y: minY, width: maxX - minX, height: maxY - minY };
-        }
-      } catch {
-        /* fallback below */
-      }
-
-      try {
-        const rect = fo.getBoundingClientRect();
-        const screenCTM = svg.getScreenCTM();
-        if (!screenCTM) return null;
-        const inv = screenCTM.inverse();
-        const pTL = svg.createSVGPoint();
-        pTL.x = rect.left;
-        pTL.y = rect.top;
-        const pBR = svg.createSVGPoint();
-        pBR.x = rect.right;
-        pBR.y = rect.bottom;
-        const tTL = pTL.matrixTransform(inv);
-        const tBR = pBR.matrixTransform(inv);
-        const minX = Math.min(tTL.x, tBR.x);
-        const minY = Math.min(tTL.y, tBR.y);
-        const maxX = Math.max(tTL.x, tBR.x);
-        const maxY = Math.max(tTL.y, tBR.y);
-        return { x: minX, y: minY, width: maxX - minX, height: maxY - minY };
-      } catch {
-        return null;
-      }
-    }
-
-    function rectIntersectionArea(a, b) {
-      const x1 = Math.max(a.x, b.x);
-      const y1 = Math.max(a.y, b.y);
-      const x2 = Math.min(a.x + a.width, b.x + b.width);
-      const y2 = Math.min(a.y + a.height, b.y + b.height);
-      if (x2 <= x1 || y2 <= y1) return 0;
-      return (x2 - x1) * (y2 - y1);
-    }
-
-    // choose the best foreignObject to write into
-    const fObjects = Array.from(svg.querySelectorAll('foreignObject'));
-    let bestFo = null;
-    let bestOverlap = -1;
-    let bestByDist = null;
-    let bestDist = Infinity;
-
-    for (const fo of fObjects) {
-      const foBox = foreignObjectBBoxInSvg(fo);
-      if (!foBox) continue;
-      const overlap = rectIntersectionArea(foBox, bbox);
-      if (overlap > bestOverlap) {
-        bestOverlap = overlap;
-        bestFo = fo;
-      }
-      const foCenter = {
-        x: foBox.x + foBox.width / 2,
-        y: foBox.y + foBox.height / 2,
-      };
-      const dist = Math.hypot(
-        foCenter.x - toothCenter.x,
-        foCenter.y - toothCenter.y
-      );
-      if (dist < bestDist) {
-        bestDist = dist;
-        bestByDist = fo;
-      }
-    }
-
-    const chosenFo = bestOverlap > 0 ? bestFo : bestByDist || bestFo;
-
-    if (chosenFo) {
-      const input = chosenFo.querySelector('input, textarea');
-      if (input) {
-        input.value = 'IMP';
-        input.style.border = `2px solid ${color}`;
-        input.style.color = color;
-      }
+    // Escribir "IMP" en el input del diente (mapeo determinista por DOM).
+    const input = inputForToothDOM(svg, toothDataName);
+    if (input) {
+      input.value = 'IMP';
+      input.style.border = `2px solid ${color}`;
+      input.style.color = color;
     }
 
     // draw a visible "IMP" label on the overlay near the center of the tooth
@@ -2260,7 +2118,7 @@ export function addPegTooth(toothDataName, color = 'blue') {
   return false;
 }
 
-export function addDentalProsthesis(color = 'blue') {
+export function addDentalProsthesis(color = 'blue', onEnd) {
   const svg = getSvg();
   if (!svg) return { stop() {} };
   const overlay = ensureOverlay(svg);
@@ -2268,16 +2126,18 @@ export function addDentalProsthesis(color = 'blue') {
   const names = [];
   const markers = [];
   const offset = 5;
+  let drew = false;
+  let ended = false;
 
   function onClick(e) {
     if (!svg.contains(e.target)) return;
-    const g = findToothGroupFromEvent(e.target);
+    const g = toothGroupFromEventRobust(svg, e);
     if (!g) {
       console.warn('Clic ignorado: No se hizo clic en un diente.');
       return;
     }
     const name = g.getAttribute('data-name');
-    if (!name) return;
+    if (!name || names.includes(name)) return;
     names.push(name);
 
     const toothCenter = centerOfTooth(svg, name);
@@ -2329,6 +2189,7 @@ export function addDentalProsthesis(color = 'blue') {
       const perpAngle = angle + Math.PI / 2;
       const dx = Math.cos(perpAngle) * offset;
       const dy = Math.sin(perpAngle) * offset;
+      const ppfId = `ppr-${names.join('-')}-${Date.now()}`;
       // Línea 1
       const l1 = document.createElementNS('http://www.w3.org/2000/svg', 'line');
       l1.setAttribute('x1', p1.x + dx);
@@ -2337,6 +2198,8 @@ export function addDentalProsthesis(color = 'blue') {
       l1.setAttribute('y2', p2.y + dy);
       l1.setAttribute('stroke', color);
       l1.setAttribute('stroke-width', '5');
+      l1.setAttribute('class', 'annotation ppr-linea');
+      l1.setAttribute('data-id', `${ppfId}-1`);
       overlay.appendChild(l1);
       // Línea 2
       const l2 = document.createElementNS('http://www.w3.org/2000/svg', 'line');
@@ -2346,8 +2209,11 @@ export function addDentalProsthesis(color = 'blue') {
       l2.setAttribute('y2', p2.y - dy);
       l2.setAttribute('stroke', color);
       l2.setAttribute('stroke-width', '5');
+      l2.setAttribute('class', 'annotation ppr-linea');
+      l2.setAttribute('data-id', `${ppfId}-2`);
       overlay.appendChild(l2);
 
+      drew = true;
       cleanup();
     }
   }
@@ -2358,6 +2224,10 @@ export function addDentalProsthesis(color = 'blue') {
     svg.removeEventListener('click', onClick);
     window.removeEventListener('keydown', onKey);
     markers.forEach((m) => m.remove());
+    if (!ended) {
+      ended = true;
+      if (typeof onEnd === 'function') onEnd(drew);
+    }
   }
   svg.addEventListener('click', onClick);
   window.addEventListener('keydown', onKey);
@@ -2468,7 +2338,7 @@ export function addPDC(arcada, color = 'blue', typeId) {
   return true;
 }
 
-export function addPPF(color = 'blue') {
+export function addPPF(color = 'blue', onEnd) {
   const svg = getSvg();
   if (!svg) return { stop() {} };
 
@@ -2479,6 +2349,8 @@ export function addPPF(color = 'blue') {
   const displacement = 55;
   const LINE_WIDTH = 5;
   let offset;
+  let drew = false;
+  let ended = false;
 
   toast(
     'Modo PPF: Haz clic en el primer diente pilar y luego en el segundo diente pilar. Presiona ESC para cancelar.'
@@ -2488,10 +2360,14 @@ export function addPPF(color = 'blue') {
     svg.removeEventListener('click', onClick);
     window.removeEventListener('keydown', onKey);
     markers.forEach((m) => m.remove());
+    if (!ended) {
+      ended = true;
+      if (typeof onEnd === 'function') onEnd(drew);
+    }
   }
 
   function onClick(e) {
-    const g = findToothGroupFromEvent(e.target);
+    const g = toothGroupFromEventRobust(svg, e);
     if (!g) {
       console.warn('Clic ignorado: No se hizo clic en un diente.');
       return;
@@ -2591,6 +2467,7 @@ export function addPPF(color = 'blue') {
       drawLine(p1_body.x, p1_body.y, p2_body.x, p2_body.y, 'main');
       drawLine(p2_body.x, p2_body.y, p2.x, p2.y, 'conn-2');
 
+      drew = true;
       // Eliminar marcadores temporales y finalizar
       cleanup();
     }
@@ -2603,7 +2480,7 @@ export function addPPF(color = 'blue') {
   return { stop: cleanup };
 }
 
-export function addTransposition(color = 'blue') {
+export function addTransposition(color = 'blue', onEnd) {
   const svg = getSvg();
   if (!svg) return { stop() {} };
 
@@ -2613,6 +2490,8 @@ export function addTransposition(color = 'blue') {
   const markers = [];
   const CURVE_HEIGHT = 20;
   const DISPLACEMENT = 55;
+  let drew = false;
+  let ended = false;
 
   // 🔑 AJUSTE CLAVE: Aumentamos el desplazamiento a 25 para evitar superposición
   const ARROW_H_OFFSET = 15;
@@ -2625,10 +2504,14 @@ export function addTransposition(color = 'blue') {
     svg.removeEventListener('click', onClick);
     window.removeEventListener('keydown', onKey);
     markers.forEach((m) => m.remove());
+    if (!ended) {
+      ended = true;
+      if (typeof onEnd === 'function') onEnd(drew);
+    }
   }
 
   function onClick(e) {
-    const g = findToothGroupFromEvent(e.target);
+    const g = toothGroupFromEventRobust(svg, e);
     if (!g) {
       console.warn('Clic ignorado: No se hizo clic en un diente.');
       return;
@@ -2753,6 +2636,7 @@ export function addTransposition(color = 'blue') {
       drawArrow(startB_X, endB_X, 'B');
       ensureArrowMarker(svg, color, 'transposition');
 
+      drew = true;
       cleanup();
     }
   }

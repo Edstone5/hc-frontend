@@ -110,8 +110,11 @@ export default function Odontograma() {
       }
     }
 
-    // 2) Si no, elige el diente cuyo centro esté más cerca del click (en
-    //    coordenadas de PANTALLA, robusto al escalado responsive del SVG).
+    // 2) Si no cayó sobre el trazo, el click debe caer DENTRO del bounding box
+    //    de un diente (su área visual) para seleccionarlo. Clicar en el espacio
+    //    vacío entre dientes NO selecciona nada (evita selecciones accidentales).
+    //    Si varios bounding boxes contienen el punto (solapamiento de dientes
+    //    contiguos), se elige aquel cuyo centro esté más cerca del click.
     const grupos = svg.querySelectorAll('.tooth-group[data-name]');
     let mejor = null;
     let mejorDist = Infinity;
@@ -123,6 +126,13 @@ export default function Odontograma() {
         return;
       }
       if (!rect || (rect.width === 0 && rect.height === 0)) return;
+      // El punto de click debe estar dentro del rectángulo del diente.
+      const dentro =
+        e.clientX >= rect.left &&
+        e.clientX <= rect.right &&
+        e.clientY >= rect.top &&
+        e.clientY <= rect.bottom;
+      if (!dentro) return;
       const cx = rect.left + rect.width / 2;
       const cy = rect.top + rect.height / 2;
       const d = Math.hypot(cx - e.clientX, cy - e.clientY);
@@ -131,8 +141,7 @@ export default function Odontograma() {
         mejor = g.getAttribute('data-name');
       }
     });
-    // Umbral generoso (120px) para evitar selecciones accidentales lejanas.
-    if (mejor && mejorDist <= 120) setSelectedTooth(mejor.trim());
+    if (mejor) setSelectedTooth(mejor.trim());
   }, []);
 
   // Resalta el diente seleccionado marcando su etiqueta (FDI) en el SVG.
@@ -255,8 +264,23 @@ export default function Odontograma() {
 
     // ── Persistencia en BD (enfoque híbrido RF-06) ─────────────────────────
     // El localStorage queda como respaldo offline; la BD es la fuente oficial.
-    // Regla RF-06: el odontograma INICIAL es único por historia.
-    if (tipoOdontograma === TIPO_INICIAL && yaExisteInicial) {
+    // Regla RF-06: el odontograma INICIAL es único por historia y debe existir
+    // antes que cualquier EVOLUCIÓN (no puede haber evolución sin línea base).
+    let tipoEfectivo = tipoOdontograma;
+
+    // CONTINGENCIA: si se intenta guardar una EVOLUCIÓN y aún NO existe un
+    // INICIAL para la historia, este primer odontograma se guarda como INICIAL
+    // automáticamente (la evolución requiere una línea base previa).
+    if (tipoOdontograma === TIPO_EVOLUCION && !yaExisteInicial) {
+      tipoEfectivo = TIPO_INICIAL;
+      toast(
+        'Aún no existía un odontograma INICIAL para este paciente; este se ha guardado como INICIAL (línea base).',
+        { icon: 'ℹ️', duration: 6000 }
+      );
+    }
+
+    // El INICIAL es único: si ya existe, no se permite crear otro.
+    if (tipoEfectivo === TIPO_INICIAL && yaExisteInicial) {
       toast.error(
         'Ya existe un odontograma INICIAL para esta historia. Use el tipo EVOLUCIÓN para registrar cambios.'
       );
@@ -267,7 +291,7 @@ export default function Odontograma() {
       {
         idHistory: patientId,
         data: {
-          tipo: tipoOdontograma,
+          tipo: tipoEfectivo,
           svg: svgContent,
           especificaciones: currentEspec,
           observaciones: currentObs,
@@ -275,10 +299,14 @@ export default function Odontograma() {
         },
       },
       {
-        onSuccess: () =>
+        onSuccess: () => {
           toast.success(
-            `Odontograma ${tipoOdontograma} guardado en la historia clínica (paciente ${patientId}).`
-          ),
+            `Odontograma ${tipoEfectivo} guardado en la historia clínica (paciente ${patientId}).`
+          );
+          // Mantener la UI coherente con lo realmente guardado.
+          if (tipoEfectivo !== tipoOdontograma)
+            setTipoOdontograma(tipoEfectivo);
+        },
         onError: (e) =>
           toast.error(
             e.message ||

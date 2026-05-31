@@ -276,16 +276,27 @@ const { data: user } = useCurrentUser();
 
 La vista contiene dos secciones complementarias:
 
-1. **SVG interactivo** con 24 herramientas de anotación clínica
+1. **SVG interactivo** con 24 herramientas de anotación clínica (panel `odotools.jsx`)
    - Coronas (CM, CF, CMC, CV, CLM, CT)
    - Defectos de esmalte, edéntulo, diastema, implantes
    - Aparatos ortodónticos fijos y removibles
-   - Guarda versiones en localStorage por paciente
+   - Prótesis: PPF (fija), PDC (completa), PPR (parcial removible)
+   - Panel organizado en 6 secciones clínicas; selección de diente por clic y
+     color NTS-188 (azul = buen estado, rojo = mal estado). Ver ADR-0016.
+   - **Lista "Tratamientos aplicados"** con borrado individual por ítem: cada
+     herramienta aplicada se registra (sigla, diente, color) y puede eliminarse
+     independientemente para corregir errores de selección sin borrar todo. El
+     borrado de un ítem también remueve su trazo del SVG. Ver ADR-0017.
+   - Guarda versiones en localStorage por paciente y SVG en BD (`odontograma_svg`)
 
 2. **Registro de intervenciones** (integrado desde `OdontogramaPage.jsx` en v2.2.0)
    - Formulario por diente: número FDI, superficie, diagnóstico, tratamiento, alumno, fecha
    - Tabla de historial persistida en la base de datos
    - Ver ADR-0008 para justificación de la consolidación
+
+> **Nota:** La lista "Tratamientos aplicados" (visual, de sesión) es distinta del
+> "Registro de intervenciones" (formal, persistido en BD con diagnóstico/tratamiento).
+> La primera traza lo dibujado en el editor SVG; la segunda es el registro clínico oficial.
 
 ---
 
