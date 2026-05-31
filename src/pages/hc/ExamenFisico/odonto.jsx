@@ -18,6 +18,7 @@ import OdontogramaToolsPanel from './odotools';
 import IhoSPanel from './IhoSPanel';
 import EpbPanel from './EpbPanel';
 import LeyendaOdonto from './LeyendaOdonto';
+import ExportarPDF from '@components/PdfExport/ExportarPDF';
 import {
   HALLAZGOS_ODONTO,
   HALLAZGO_LABEL,
@@ -91,12 +92,20 @@ export default function Odontograma() {
   // ── TIPO DE ODONTOGRAMA (INICIAL / EVOLUCION) — RF-06 ─────────────────────
   const [tipoOdontograma, setTipoOdontograma] = useState(TIPO_EVOLUCION);
 
+  // Vista de solo lectura del último odontograma SVG guardado en BD (Track C2).
+  const [verGuardadoBD, setVerGuardadoBD] = useState(false);
+
   // SVG persistido en BD (enfoque híbrido). Consultamos todos para saber si
   // ya existe un INICIAL (que es único por historia).
   const { data: svgsGuardados = [] } = useOdontogramaSvg(patientId);
   const { mutate: guardarSvgBD } = useAddOdontogramaSvg();
   const svgInicial = svgsGuardados.find((s) => s.tipo === TIPO_INICIAL) || null;
   const yaExisteInicial = Boolean(svgInicial);
+  // Último SVG guardado del tipo activo (o el más reciente) para la vista BD.
+  const svgGuardadoActual =
+    svgsGuardados.find((s) => s.tipo === tipoOdontograma) ||
+    svgsGuardados[0] ||
+    null;
 
   // Índices CPO-D / CEO-D derivados de las entradas estructuradas (Bloque 3).
   const indices = calcularIndices(entradas);
@@ -114,6 +123,7 @@ export default function Odontograma() {
   }, []);
 
   // Resalta el diente seleccionado marcando su etiqueta (FDI) en el SVG.
+  const [showHistory, setShowHistory] = useState(false);
   useEffect(() => {
     const svg = document.querySelector('svg.odo');
     if (!svg) return;
@@ -128,7 +138,6 @@ export default function Odontograma() {
   const [formEntrada, setFormEntrada] = useState(FORM_INICIAL);
   const [mostrarFormEntrada, setMostrarFormEntrada] = useState(false);
 
-  const [showHistory, setShowHistory] = useState(false);
   const [selectedVersion, setSelectedVersion] = useState(null);
   const [historyList, setHistoryList] = useState([]);
 
@@ -297,6 +306,62 @@ export default function Odontograma() {
   }, []);
 
   // --- NUEVO RENDERIZADO: MODOS DE VISTA ---
+
+  // 0. Vista de solo lectura del último odontograma guardado en BD (Track C2)
+  if (verGuardadoBD && svgGuardadoActual) {
+    return (
+      <div style={{ padding: 20, background: '#eef2ff', borderRadius: 8 }}>
+        <button
+          onClick={() => setVerGuardadoBD(false)}
+          style={{
+            marginBottom: 15,
+            padding: '8px 15px',
+            background: 'var(--color-primary)',
+            color: 'white',
+            border: 'none',
+            borderRadius: 5,
+            cursor: 'pointer',
+          }}
+        >
+          ← Volver al odontograma editable
+        </button>
+        <h2 style={{ marginBottom: 4 }}>
+          Odontograma guardado en BD — {svgGuardadoActual.tipo}
+        </h2>
+        <p style={{ fontSize: 13, color: '#4b5563', marginBottom: 12 }}>
+          Fecha:{' '}
+          {formatFecha(svgGuardadoActual.fecha || svgGuardadoActual.created_at)}
+        </p>
+        {/* SVG serializado tal cual se guardó (solo lectura) */}
+        <div
+          dangerouslySetInnerHTML={{ __html: svgGuardadoActual.svg }}
+          style={{
+            border: '1px solid #ccc',
+            padding: 10,
+            background: 'white',
+            overflow: 'auto',
+          }}
+        />
+        {(svgGuardadoActual.especificaciones ||
+          svgGuardadoActual.observaciones) && (
+          <div style={{ marginTop: 16 }}>
+            {svgGuardadoActual.especificaciones && (
+              <p>
+                <strong>Especificaciones:</strong>{' '}
+                {svgGuardadoActual.especificaciones}
+              </p>
+            )}
+            {svgGuardadoActual.observaciones && (
+              <p>
+                <strong>Observaciones:</strong>{' '}
+                {svgGuardadoActual.observaciones}
+              </p>
+            )}
+          </div>
+        )}
+      </div>
+    );
+  }
 
   // 1. Vista de una versión seleccionada (Historial abierto)
   if (showHistory && selectedVersion) {
@@ -504,18 +569,52 @@ export default function Odontograma() {
             {formatFecha(svgInicial?.fecha || svgInicial?.created_at)}
           </span>
         )}
-        <span
+
+        {/* Acciones: ver guardado en BD (C2) + exportar PDF (C3) */}
+        <div
           style={{
-            fontSize: 11,
-            color: '#9ca3af',
             marginLeft: 'auto',
-            maxWidth: 360,
+            display: 'flex',
+            gap: 8,
+            alignItems: 'center',
           }}
         >
-          El tipo seleccionado se aplica al guardar el dibujo y al registrar
-          intervenciones (azul = buen estado, rojo = mal estado — NTS N° 188).
-        </span>
+          {svgGuardadoActual && (
+            <button
+              onClick={() => setVerGuardadoBD(true)}
+              style={{
+                fontSize: 13,
+                fontWeight: 600,
+                padding: '7px 14px',
+                borderRadius: 8,
+                border: '2px solid var(--color-primary)',
+                background: 'white',
+                color: 'var(--color-primary)',
+                cursor: 'pointer',
+              }}
+            >
+              Ver guardado (BD)
+            </button>
+          )}
+          <ExportarPDF
+            targetId="odontograma-export"
+            nombreArchivo="odontograma"
+            titulo="Odontograma"
+            idHistoria={patientId}
+          />
+        </div>
       </div>
+      <p
+        style={{
+          fontSize: 11,
+          color: '#9ca3af',
+          margin: '0 0 8px',
+          padding: '0 4px',
+        }}
+      >
+        El tipo seleccionado se aplica al guardar el dibujo y al registrar
+        intervenciones (azul = buen estado, rojo = mal estado — NTS N° 188).
+      </p>
 
       {/* Leyenda normativa de hallazgos (NTS N° 188-2022) */}
       <LeyendaOdonto />
@@ -529,6 +628,7 @@ export default function Odontograma() {
             prompt, que sigue disponible como respaldo. */}
         {/* eslint-disable-next-line jsx-a11y/no-static-element-interactions, jsx-a11y/click-events-have-key-events */}
         <div
+          id="odontograma-export"
           onClick={handleToothClick}
           style={{
             flex: 1,
@@ -2359,7 +2459,20 @@ export default function Odontograma() {
             </p>
           </div>
           <button
-            onClick={() => setMostrarFormEntrada((s) => !s)}
+            onClick={() => {
+              // Al abrir el formulario, prefijar el diente seleccionado por
+              // click en el SVG (Track C1): "1.6" → FDI "16".
+              setMostrarFormEntrada((s) => {
+                const abriendo = !s;
+                if (abriendo && selectedTooth && !formEntrada.numeroDiente) {
+                  setFormEntrada((prev) => ({
+                    ...prev,
+                    numeroDiente: selectedTooth.replace('.', ''),
+                  }));
+                }
+                return abriendo;
+              });
+            }}
             style={{
               background: mostrarFormEntrada
                 ? '#e5e7eb'
