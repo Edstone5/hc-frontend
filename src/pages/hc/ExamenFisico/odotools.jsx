@@ -167,10 +167,26 @@ export default function OdontogramaToolsPanel({
   const esAusente = (label = '') =>
     /pieza ausente|\b(?:DNE|DEX|DAO)\b/i.test(label);
 
+  // Matriz de exclusión mutua (espejo de la del backend, ADR-0022). Clasifica una
+  // etiqueta de tratamiento en { grupo, variante }: dos variantes DISTINTAS del
+  // mismo grupo no pueden coexistir en la misma pieza.
+  const grupoDe = (label = '') => {
+    if (/macrodoncia/i.test(label)) return { g: 'tamaño', v: 'MAC' };
+    if (/microdoncia/i.test(label)) return { g: 'tamaño', v: 'MIC' };
+    if (/giroversión\s+derecha/i.test(label))
+      return { g: 'giroversión', v: 'D' };
+    if (/giroversión\s+izquierda/i.test(label))
+      return { g: 'giroversión', v: 'I' };
+    if (/^corona/i.test(label)) return { g: 'corona', v: label }; // una corona por pieza
+    return null;
+  };
+
   const validarExclusion = (tooth, label) => {
     if (!tooth) return { ok: true };
     const previos = treatments.filter((t) => t.tooth === tooth);
     if (!previos.length) return { ok: true };
+
+    // 1) Pieza ausente.
     const yaAusente = previos.some((t) => esAusente(t.label));
     const nuevoAusente = esAusente(label);
     if (yaAusente && !nuevoAusente) {
@@ -185,6 +201,22 @@ export default function OdontogramaToolsPanel({
         warn: `La pieza ${tooth} ya tiene ${previos.length} registro(s); marcarla como AUSENTE puede ser inconsistente en un odontograma inicial.`,
       };
     }
+
+    // 2) Grupos de exclusión mutua (tamaño, giroversión, corona).
+    const gNuevo = grupoDe(label);
+    if (gNuevo) {
+      const conflicto = previos.find((t) => {
+        const gp = grupoDe(t.label);
+        return gp && gp.g === gNuevo.g && gp.v !== gNuevo.v;
+      });
+      if (conflicto) {
+        return {
+          ok: false,
+          msg: `La pieza ${tooth} ya tiene "${conflicto.label}", incompatible con "${label}". Elimina el tratamiento previo primero.`,
+        };
+      }
+    }
+
     return { ok: true };
   };
 
