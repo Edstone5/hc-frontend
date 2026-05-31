@@ -38,6 +38,9 @@ export default function OdontogramaToolsPanel({
   const [activeToolName, setActiveToolName] = useState(null);
   const [pdaMenuOpen, setPDAMenuOpen] = useState(false);
   const [pdcMenuOpen, setPDCMenuOpen] = useState(false);
+  // Color activo (NTS-188): azul = buen estado, rojo = mal estado. Reemplaza
+  // los window.prompt de color (no aptos para tablet).
+  const [colorActivo, setColorActivo] = useState('blue');
 
   useEffect(() => {
     return () => {
@@ -60,10 +63,8 @@ export default function OdontogramaToolsPanel({
     return t ? t.trim() : null;
   };
 
-  const askColor = (defaultColor = 'blue') => {
-    const c = window.prompt('Color (blue/red) o hex (#rrggbb):', defaultColor);
-    return c ? c.trim() : defaultColor;
-  };
+  // Devuelve el color activo seleccionado en el panel (sin prompt).
+  const askColor = () => colorActivo;
 
   const stopActiveTool = () => {
     if (activeTool && typeof activeTool.stop === 'function') {
@@ -383,14 +384,10 @@ export default function OdontogramaToolsPanel({
   };
 
   const onRemovableOrtho = () => {
-    const color = askColor('red');
-    const stepsInput = window.prompt(
-      'Cantidad de picos del zig-zag (pasos):',
-      '10'
-    );
-    const amplitudeInput = window.prompt('Amplitud del zig-zag (px):', '10');
-    const steps = Math.max(1, parseInt(stepsInput, 10) || 10);
-    const amplitude = Math.max(0, parseFloat(amplitudeInput) || 10);
+    const color = askColor();
+    // Valores estándar del zig-zag (sin prompts; aptos para tablet).
+    const steps = 10;
+    const amplitude = 10;
 
     try {
       const handle = odontogramaTools.startRemovableOrthoMode(
@@ -1004,6 +1001,56 @@ export default function OdontogramaToolsPanel({
             elige un tratamiento.
           </span>
         )}
+      </div>
+
+      {/* Selector de color activo (NTS-188) — reemplaza los prompts de color */}
+      <div
+        style={{
+          display: 'flex',
+          alignItems: 'center',
+          gap: 8,
+          marginBottom: 12,
+        }}
+      >
+        <span style={{ fontSize: 13, fontWeight: 600, color: '#374151' }}>
+          Color:
+        </span>
+        {[
+          { val: 'blue', label: 'Azul', hex: '#1d4ed8' },
+          { val: 'red', label: 'Rojo', hex: '#dc2626' },
+        ].map((c) => {
+          const activo = colorActivo === c.val;
+          return (
+            <button
+              key={c.val}
+              onClick={() => setColorActivo(c.val)}
+              style={{
+                display: 'flex',
+                alignItems: 'center',
+                gap: 6,
+                padding: '5px 12px',
+                borderRadius: 6,
+                border: activo ? `2px solid ${c.hex}` : '2px solid #e5e7eb',
+                background: activo ? c.hex : 'white',
+                color: activo ? 'white' : '#374151',
+                fontWeight: 600,
+                fontSize: 13,
+                cursor: 'pointer',
+              }}
+            >
+              <span
+                style={{
+                  width: 12,
+                  height: 12,
+                  borderRadius: 3,
+                  background: c.hex,
+                  border: activo ? '1px solid white' : 'none',
+                }}
+              />
+              {c.label}
+            </button>
+          );
+        })}
       </div>
 
       <div className="grid grid-cols-1 md:grid-cols-2 gap-2">

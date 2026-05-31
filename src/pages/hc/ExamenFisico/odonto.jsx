@@ -93,11 +93,46 @@ export default function Odontograma() {
   // un window.prompt (apto para tablet, alineado con NTS-188 y software comercial).
   const [selectedTooth, setSelectedTooth] = useState(null);
 
+  // Selecciona el diente MÁS CERCANO al punto de click (no requiere acertar el
+  // trazo del diente, cuyo relleno es transparente). Mucho más usable en tablet.
   const handleToothClick = useCallback((e) => {
-    const grupo = e.target.closest && e.target.closest('.tooth-group');
-    if (!grupo) return;
-    const nombre = grupo.getAttribute('data-name');
-    if (nombre) setSelectedTooth(nombre.trim());
+    const svg = document.querySelector('svg.odo');
+    if (!svg) return;
+
+    // 1) Si el click cae directamente sobre un grupo de diente, úsalo.
+    const directo =
+      e.target.closest && e.target.closest('.tooth-group[data-name]');
+    if (directo) {
+      const nombre = directo.getAttribute('data-name');
+      if (nombre) {
+        setSelectedTooth(nombre.trim());
+        return;
+      }
+    }
+
+    // 2) Si no, elige el diente cuyo centro esté más cerca del click (en
+    //    coordenadas de PANTALLA, robusto al escalado responsive del SVG).
+    const grupos = svg.querySelectorAll('.tooth-group[data-name]');
+    let mejor = null;
+    let mejorDist = Infinity;
+    grupos.forEach((g) => {
+      let rect;
+      try {
+        rect = g.getBoundingClientRect();
+      } catch {
+        return;
+      }
+      if (!rect || (rect.width === 0 && rect.height === 0)) return;
+      const cx = rect.left + rect.width / 2;
+      const cy = rect.top + rect.height / 2;
+      const d = Math.hypot(cx - e.clientX, cy - e.clientY);
+      if (d < mejorDist) {
+        mejorDist = d;
+        mejor = g.getAttribute('data-name');
+      }
+    });
+    // Umbral generoso (120px) para evitar selecciones accidentales lejanas.
+    if (mejor && mejorDist <= 120) setSelectedTooth(mejor.trim());
   }, []);
 
   // Resalta el diente seleccionado marcando su etiqueta (FDI) en el SVG.
