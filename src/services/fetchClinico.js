@@ -239,6 +239,24 @@ export const fetchReporteAnonimo = ({ desde, hasta } = {}) => {
   return fetch(`${API}/reportes/anonimo?${p}`, opts).then(handleResponse);
 };
 
+// Reporte agregado multi-paciente del odontograma (RF-12): prevalencia de
+// caries (global y por diente) + CPO-D promedio. Filtros opcionales.
+export const fetchReporteOdontograma = ({
+  tipo,
+  alumno,
+  desde,
+  hasta,
+} = {}) => {
+  const p = new URLSearchParams();
+  if (tipo) p.set('tipo', tipo);
+  if (alumno) p.set('alumno', alumno);
+  if (desde) p.set('desde', desde);
+  if (hasta) p.set('hasta', hasta);
+  return fetch(`${API}/hc/odontograma/reporte/prevalencia?${p}`, opts).then(
+    handleResponse
+  );
+};
+
 // ── EQUIPOS ───────────────────────────────────────────────────────────────────
 export const fetchEquipos = () =>
   fetch(`${API}/equipos`, opts).then(handleResponse);

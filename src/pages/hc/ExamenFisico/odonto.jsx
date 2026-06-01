@@ -11,7 +11,7 @@
 //   - Ambos son parte de RF-06: "odontograma inicial" (SVG) + "evolutivo" (tabla en BD).
 //   - Tenerlos en la misma vista evita que el estudiante navegue entre dos secciones.
 
-import React, { useEffect, useState, useCallback } from 'react';
+import React, { useEffect, useState, useCallback, useRef } from 'react';
 import { useParams } from 'react-router';
 import toast from 'react-hot-toast';
 import OdontogramaToolsPanel from './odotools';
@@ -316,6 +316,96 @@ export default function Odontograma() {
     );
   }, [patientId, STORAGE_KEY, tipoOdontograma, yaExisteInicial, guardarSvgBD]);
 
+  // ── REHIDRATACIÓN DEL EDITOR DESDE BD (tarea 3) ───────────────────────────
+  // "Ver guardado (BD)" es solo lectura; esta función carga el SVG persistido
+  // DENTRO del editor vivo para seguir editándolo. Copia tres cosas del SVG
+  // guardado al SVG activo: (1) el overlay de anotaciones (#odontograma-overlay),
+  // (2) los valores de los inputs de cada diente (las siglas), y (3) los campos
+  // de texto (fecha, especificaciones, observaciones). El esqueleto de 52 dientes
+  // es estático e idéntico, así que no se reemplaza.
+  const rehidratarDesdeSvg = useCallback((svgString) => {
+    if (!svgString) return false;
+    const svgVivo = document.querySelector('svg.odo');
+    if (!svgVivo) return false;
+    let svgGuardado;
+    try {
+      const doc = new DOMParser().parseFromString(svgString, 'image/svg+xml');
+      svgGuardado = doc.querySelector('svg');
+      if (!svgGuardado || doc.querySelector('parsererror')) return false;
+    } catch {
+      return false;
+    }
+
+    // 1) Overlay de anotaciones: reemplazar el del editor por el guardado.
+    const overlayViejo = svgVivo.querySelector('#odontograma-overlay');
+    if (overlayViejo) overlayViejo.remove();
+    const overlayGuardado = svgGuardado.querySelector('#odontograma-overlay');
+    if (overlayGuardado) {
+      svgVivo.appendChild(document.importNode(overlayGuardado, true));
+    }
+
+    // 2) Valores de los inputs de dientes (mapeo posicional: el orden del DOM
+    //    es idéntico entre el SVG guardado y el vivo).
+    const inputsVivos = svgVivo.querySelectorAll('foreignObject input.letra');
+    const inputsGuardados = svgGuardado.querySelectorAll(
+      'foreignObject input.letra'
+    );
+    inputsVivos.forEach((inp, i) => {
+      const g = inputsGuardados[i];
+      if (g) inp.value = g.getAttribute('value') || g.value || '';
+    });
+
+    // 3) Campos de texto (fecha / especificaciones / observaciones).
+    const fechaG = svgGuardado.querySelector('input[type="date"]');
+    const fechaV = document.querySelector('input[type="date"]');
+    if (fechaG && fechaV) fechaV.value = fechaG.getAttribute('value') || '';
+    const especG = svgGuardado.querySelector('#inputEspecificaciones');
+    const especV = document.querySelector('#inputEspecificaciones');
+    if (especG && especV)
+      especV.value = especG.textContent || especG.getAttribute('value') || '';
+    const obsG = svgGuardado.querySelector('#inputObservaciones');
+    const obsV = document.querySelector('#inputObservaciones');
+    if (obsG && obsV)
+      obsV.value = obsG.textContent || obsG.getAttribute('value') || '';
+
+    return true;
+  }, []);
+
+  // Carga manual del SVG guardado del tipo activo dentro del editor.
+  const cargarGuardadoEnEditor = useCallback(() => {
+    if (!svgGuardadoActual) {
+      toast.error('No hay un odontograma guardado en BD para cargar.');
+      return;
+    }
+    const ok = rehidratarDesdeSvg(svgGuardadoActual.svg);
+    if (ok)
+      toast.success(
+        `Odontograma ${svgGuardadoActual.tipo} cargado en el editor. Puedes seguir editándolo.`
+      );
+    else toast.error('No se pudo cargar el odontograma guardado.');
+  }, [svgGuardadoActual, rehidratarDesdeSvg]);
+
+  // Rehidratación AUTOMÁTICA al abrir: si existe un SVG guardado del tipo activo
+  // y el usuario aún no ha dibujado nada en esta sesión, se precarga una sola vez
+  // (por tipo) para que el editor muestre el estado real, no un lienzo vacío.
+  const rehidratadoRef = useRef({});
+  useEffect(() => {
+    if (!svgGuardadoActual) return;
+    if (rehidratadoRef.current[tipoOdontograma]) return;
+    // Esperar a que el SVG del editor exista en el DOM.
+    const t = setTimeout(() => {
+      const svgVivo = document.querySelector('svg.odo');
+      if (!svgVivo) return;
+      const overlay = svgVivo.querySelector('#odontograma-overlay');
+      const yaHayAnotaciones = overlay && overlay.children.length > 0;
+      if (yaHayAnotaciones) return; // no pisar trabajo en curso
+      if (rehidratarDesdeSvg(svgGuardadoActual.svg)) {
+        rehidratadoRef.current[tipoOdontograma] = true;
+      }
+    }, 300);
+    return () => clearTimeout(t);
+  }, [svgGuardadoActual, tipoOdontograma, rehidratarDesdeSvg]);
+
   // Función para CARGAR el historial de versiones
   const loadHistory = useCallback(() => {
     // USAMOS LA CLAVE ESPECÍFICA DEL PACIENTE (STORAGE_KEY)
@@ -598,21 +688,39 @@ export default function Odontograma() {
           }}
         >
           {svgGuardadoActual && (
-            <button
-              onClick={() => setVerGuardadoBD(true)}
-              style={{
-                fontSize: 13,
-                fontWeight: 600,
-                padding: '7px 14px',
-                borderRadius: 8,
-                border: '2px solid var(--color-primary)',
-                background: 'white',
-                color: 'var(--color-primary)',
-                cursor: 'pointer',
-              }}
-            >
-              Ver guardado (BD)
-            </button>
+            <>
+              <button
+                onClick={() => setVerGuardadoBD(true)}
+                style={{
+                  fontSize: 13,
+                  fontWeight: 600,
+                  padding: '7px 14px',
+                  borderRadius: 8,
+                  border: '2px solid var(--color-primary)',
+                  background: 'white',
+                  color: 'var(--color-primary)',
+                  cursor: 'pointer',
+                }}
+              >
+                Ver guardado (BD)
+              </button>
+              <button
+                onClick={cargarGuardadoEnEditor}
+                title="Carga el odontograma guardado dentro del editor para seguir editándolo"
+                style={{
+                  fontSize: 13,
+                  fontWeight: 600,
+                  padding: '7px 14px',
+                  borderRadius: 8,
+                  border: '2px solid #0d9488',
+                  background: '#0d9488',
+                  color: 'white',
+                  cursor: 'pointer',
+                }}
+              >
+                Cargar guardado (editar)
+              </button>
+            </>
           )}
           <ExportarPDF
             targetId="odontograma-export"

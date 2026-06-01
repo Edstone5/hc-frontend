@@ -43,6 +43,7 @@ import {
   fetchReporteAdmin,
   fetchReporteDocente,
   fetchReporteAnonimo,
+  fetchReporteOdontograma,
   fetchEquipos,
   addEquipo,
   updateEquipo,
@@ -367,6 +368,13 @@ export const useReporteAnonimo = (params) =>
     queryKey: ['reporte-anonimo', params],
     queryFn: () => fetchReporteAnonimo(params),
     enabled: false,
+    refetchOnWindowFocus: false,
+  });
+// Reporte agregado del odontograma (RF-12)
+export const useReporteOdontograma = (params) =>
+  useQuery({
+    queryKey: ['reporte-odontograma', params],
+    queryFn: () => fetchReporteOdontograma(params),
     refetchOnWindowFocus: false,
   });
 

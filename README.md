@@ -162,15 +162,16 @@ hc-frontend/
 
 ### Panel Administrador (`/admin/*`)
 
-| Ruta                    | Componente              | RF          |
-| ----------------------- | ----------------------- | ----------- |
-| `/admin`                | `AdminDashboard.jsx`    | RF-ADM-03   |
-| `/admin/create-student` | `CreateStudent.jsx`     | RF-ADM-05   |
-| `/admin/student/:id`    | `StudentDetailPage.jsx` | RF-ADM-04   |
-| `/admin/busqueda`       | `Busqueda.jsx`          | RF-03       |
-| `/admin/reportes`       | `Reportes.jsx`          | RF-12       |
-| `/admin/equipos`        | `Equipos.jsx`           | RF-15       |
-| `/admin/transferir/:id` | `TransferirHC.jsx`      | RF-03/RF-10 |
+| Ruta                          | Componente                | RF                                              |
+| ----------------------------- | ------------------------- | ----------------------------------------------- |
+| `/admin`                      | `AdminDashboard.jsx`      | RF-ADM-03                                       |
+| `/admin/create-student`       | `CreateStudent.jsx`       | RF-ADM-05                                       |
+| `/admin/student/:id`          | `StudentDetailPage.jsx`   | RF-ADM-04                                       |
+| `/admin/busqueda`             | `Busqueda.jsx`            | RF-03                                           |
+| `/admin/reportes`             | `Reportes.jsx`            | RF-12                                           |
+| `/admin/reportes/odontograma` | `ReportesOdontograma.jsx` | RF-12 (prevalencia de caries + CPO-D, ADR-0027) |
+| `/admin/equipos`              | `Equipos.jsx`             | RF-15                                           |
+| `/admin/transferir/:id`       | `TransferirHC.jsx`        | RF-03/RF-10                                     |
 
 ### Historia Clínica (`/historia/:id/*`)
 
@@ -297,6 +298,11 @@ La vista contiene dos secciones complementarias:
      independientemente para corregir errores de selección sin borrar todo. El
      borrado de un ítem también remueve su trazo del SVG. Ver ADR-0017.
    - Guarda versiones en localStorage por paciente y SVG en BD (`odontograma_svg`)
+   - **Rehidratación del editor desde BD** (ADR-0027): "Ver guardado (BD)" muestra
+     el SVG persistido en solo lectura, y "Cargar guardado (editar)" lo carga
+     dentro del editor para seguir editándolo (copia overlay de anotaciones,
+     valores de los dientes y textos). Al abrir, si hay un SVG guardado del tipo
+     activo y el editor está vacío, se precarga automáticamente.
 
 2. **Registro de intervenciones** (integrado desde `OdontogramaPage.jsx` en v2.2.0)
    - Formulario por diente: número FDI, superficie, diagnóstico, tratamiento, alumno, fecha

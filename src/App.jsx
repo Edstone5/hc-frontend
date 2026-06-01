@@ -30,6 +30,7 @@ import Odonto from './pages/hc/ExamenFisico/odonto.jsx';
 // ── Fase 1: Admin ──────────────────────────────────────────────────────────
 import Busqueda from './pages/Admin/Busqueda.jsx';
 import Reportes from './pages/Admin/Reportes.jsx';
+import ReportesOdontograma from './pages/Admin/ReportesOdontograma.jsx';
 import Equipos from './pages/Admin/Equipos.jsx';
 
 // ── Fase 2: Módulos clínicos ──────────────────────────────────────────────
@@ -80,6 +81,10 @@ function App() {
             <Route path="/admin/student/:id" element={<StudentDetailPage />} />
             <Route path="/admin/busqueda" element={<Busqueda />} />
             <Route path="/admin/reportes" element={<Reportes />} />
+            <Route
+              path="/admin/reportes/odontograma"
+              element={<ReportesOdontograma />}
+            />
             <Route path="/admin/equipos" element={<Equipos />} />
             <Route path="/admin/transferir/:id" element={<TransferirHC />} />
           </Route>
