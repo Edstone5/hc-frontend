@@ -2,7 +2,6 @@ import React from 'react';
 import { describe, it, expect, vi } from 'vitest';
 import { renderHook, waitFor } from '@testing-library/react';
 import { QueryClient, QueryClientProvider } from '@tanstack/react-query';
-import * as fetchPatients from '../src/services/fetchPatients.js';
 import * as fetchPatient from '../src/services/fetchPatient';
 import {
   useAdultPatients,

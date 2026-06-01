@@ -370,7 +370,27 @@ npm run dev       # Servidor de desarrollo (localhost:5173)
 npm run build     # Build optimizado en dist/
 npm run preview   # Previsualizar dist/ en localhost:4173
 npm run lint      # ESLint sobre src/
+npm test          # Vitest en modo watch
+npm run test:run  # Vitest una sola pasada (CI / verificación)
 ```
+
+---
+
+## Tests (Vitest + Testing Library)
+
+La suite usa **Vitest** con entorno **jsdom** (`vitest.config.js`) y
+`@testing-library/react`. Cubre los servicios `fetch*`, los hooks de React Query
+y el render del panel del odontograma (`test/odontogramaToolsPanel.test.jsx`).
+
+```bash
+npm run test:run   # 25 archivos, 136 tests
+```
+
+> Antes la suite no podía ejecutarse completa porque faltaba la dependencia
+> `jsdom` (los tests que tocan el DOM fallaban con `Cannot find package 'jsdom'`).
+> Resuelto en ADR-0025: se añadió `jsdom` como devDependency y se actualizaron dos
+> tests obsoletos de `useHistoria` (esperaban `window.alert`; el código migró a
+> `react-hot-toast`).
 
 ---
 

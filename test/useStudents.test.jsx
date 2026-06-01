@@ -2,7 +2,6 @@ import React from 'react';
 import { describe, it, expect, vi } from 'vitest';
 import { renderHook, waitFor } from '@testing-library/react';
 import { QueryClient, QueryClientProvider } from '@tanstack/react-query';
-import * as fetchStudents from '../src/services/fetchStudents';
 import { useStudents } from '../src/hooks/useStudents';
 
 vi.mock('../src/services/fetchStudents', () => ({

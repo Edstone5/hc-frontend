@@ -2,6 +2,7 @@ import React from 'react';
 import { describe, it, expect, vi } from 'vitest';
 import { renderHook, waitFor } from '@testing-library/react';
 import { QueryClient, QueryClientProvider } from '@tanstack/react-query';
+import toast from 'react-hot-toast';
 import * as fetchHistoria from '../src/services/fetchHistoria';
 import {
   useAssignPatient,
@@ -14,6 +15,11 @@ vi.mock('../src/services/fetchHistoria', () => ({
   fetchAssignPatient: vi.fn(() => Promise.resolve({ success: true })),
   fetchPatientByHistory: vi.fn(() => Promise.resolve({ nombre: 'Paciente' })),
   registerHc: vi.fn(() => Promise.resolve({ id: 'hc123' })),
+}));
+
+// Los hooks notifican el éxito con react-hot-toast (no window.alert).
+vi.mock('react-hot-toast', () => ({
+  default: { success: vi.fn(), error: vi.fn() },
 }));
 
 const queryClient = new QueryClient();
@@ -38,24 +44,26 @@ describe('useHistoria hooks', () => {
   });
 
   it('useCreateHistoriaClinica mutation works', async () => {
-    window.alert = vi.fn();
     const { result } = renderHook(() => useCreateHistoriaClinica(), {
       wrapper,
     });
     await result.current.mutateAsync('stu1');
     expect(fetchHistoria.registerHc).toHaveBeenCalled();
-    expect(window.alert).toHaveBeenCalledWith(
-      'Historia Clínica creada con éxito'
-    );
+    await waitFor(() => {
+      expect(toast.success).toHaveBeenCalledWith(
+        'Historia Clínica creada con éxito'
+      );
+    });
   });
 
   it('useRegisterHc mutation works', async () => {
-    window.alert = vi.fn();
     const { result } = renderHook(() => useRegisterHc(), { wrapper });
     await result.current.mutateAsync('stu1');
     expect(fetchHistoria.registerHc).toHaveBeenCalled();
-    expect(window.alert).toHaveBeenCalledWith(
-      'Historia Clínica registrada con éxito'
-    );
+    await waitFor(() => {
+      expect(toast.success).toHaveBeenCalledWith(
+        'Historia Clínica registrada con éxito'
+      );
+    });
   });
 });
