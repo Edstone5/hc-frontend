@@ -202,8 +202,10 @@ export default function OdontogramaToolsPanel({
       return { g: 'caries-severidad', v: m ? m[1] : 'C' };
     }
     // Endodoncia (§6.1.37): TC (conductos) vs PC (pulpectomía) son excluyentes.
-    if (/tratamiento de conductos/i.test(label))
-      return { g: 'endodoncia', v: 'TC' };
+    // El label del panel usa la abreviatura "Trat. de conductos (TC)", por lo que se
+    // detecta por la palabra "conductos" (ningún otro tratamiento la contiene; la
+    // clavija ya se clasificó antes por /clavija/).
+    if (/conductos/i.test(label)) return { g: 'endodoncia', v: 'TC' };
     if (/pulpectom/i.test(label)) return { g: 'endodoncia', v: 'PC' };
     // Posición anormal (§6.1.28): una pieza tiene una sola dirección anómala.
     if (/posici[oó]n/i.test(label)) {
