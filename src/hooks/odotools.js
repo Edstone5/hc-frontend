@@ -1624,16 +1624,33 @@ export function toothHasGerminacion(toothName) {
   }
 }
 
-// Analiza los vecinos CONTIGUOS de un diente para la fusión.
-// Clínicamente la fusión solo ocurre entre dos piezas adyacentes, por lo que
-// las únicas posibilidades son el vecino izquierdo (num-0.1) y el derecho
-// (num+0.1) dentro del MISMO cuadrante. Devuelve qué vecinos existen y cuáles
-// están libres (no ocupados por otra fusión).
+// Vecinos anatómicos (FDI) de una pieza: mesial (hacia la línea media) y distal.
+// En FDI la posición aumenta alejándose de la línea media (x.1 = central, x.8 =
+// tercer molar; deciduos x.1..x.5). El vecino MESIAL de un central (x.1) CRUZA la
+// línea media hacia el central del cuadrante hermano (1.1↔2.1, 3.1↔4.1, 5.1↔6.1,
+// 7.1↔8.1) — por eso `num-0.1` (que daba "x.0") fallaba para 3.1 y todos los
+// centrales. El vecino DISTAL no existe en el último diente del cuadrante.
+function fdiNeighbors(name) {
+  const num = parseFloat(name);
+  if (isNaN(num)) return { mesial: null, distal: null };
+  const q = Math.trunc(num);
+  const p = Math.round((num - q) * 10); // posición 1..8 (deciduos 1..5)
+  const partner = { 1: 2, 2: 1, 3: 4, 4: 3, 5: 6, 6: 5, 7: 8, 8: 7 }[q] || null;
+  const maxPos = q >= 5 ? 5 : 8; // cuadrantes deciduos (5-8) tienen 5 piezas
+  const mesial = p <= 1 ? (partner ? `${partner}.1` : null) : `${q}.${p - 1}`;
+  const distal = p >= maxPos ? null : `${q}.${p + 1}`;
+  return { mesial, distal };
+}
+
+// Analiza los vecinos CONTIGUOS de un diente para la fusión. Clínicamente la
+// fusión solo ocurre entre dos piezas adyacentes, así que las únicas opciones son
+// el vecino mesial (`left`) y el distal (`right`). Devuelve cuáles existen y
+// cuáles están libres (no ocupados por otra fusión).
 export function getFusionCandidates(toothName) {
   const result = {
     name: null,
-    left: null,
-    right: null,
+    left: null, // mesial
+    right: null, // distal
     validLeft: false,
     validRight: false,
     leftBusy: false,
@@ -1652,12 +1669,12 @@ export function getFusionCandidates(toothName) {
     if (isNaN(num)) return result;
     result.name = name;
 
-    const left = (num - 0.1).toFixed(1);
-    const right = (num + 0.1).toFixed(1);
-    result.left = left;
-    result.right = right;
+    const { mesial, distal } = fdiNeighbors(name);
+    result.left = mesial;
+    result.right = distal;
 
     const exists = (n) =>
+      !!n &&
       !!(
         svg.querySelector(`g.tooth-group[data-name="${n}"]`) ||
         Array.from(svg.querySelectorAll('text.tooth-name')).find(
@@ -1665,20 +1682,16 @@ export function getFusionCandidates(toothName) {
         )
       );
 
-    // El vecino debe pertenecer al mismo cuadrante (mismo dígito entero) para
-    // ser realmente contiguo (p.ej. 1.1 no fusiona con 2.1).
-    const sameQuadrant = (n) => Math.trunc(parseFloat(n)) === Math.trunc(num);
-
-    result.validLeft = exists(left) && sameQuadrant(left);
-    result.validRight = exists(right) && sameQuadrant(right);
+    result.validLeft = exists(mesial);
+    result.validRight = exists(distal);
 
     const hasFusionCircle = (d) =>
       !!overlay.querySelector(`.fusion-circle[data-tooth="${d}"]`);
-    result.leftBusy = result.validLeft && hasFusionCircle(left);
-    result.rightBusy = result.validRight && hasFusionCircle(right);
+    result.leftBusy = result.validLeft && hasFusionCircle(mesial);
+    result.rightBusy = result.validRight && hasFusionCircle(distal);
 
-    if (result.validLeft && !result.leftBusy) result.selectable.push(left);
-    if (result.validRight && !result.rightBusy) result.selectable.push(right);
+    if (result.validLeft && !result.leftBusy) result.selectable.push(mesial);
+    if (result.validRight && !result.rightBusy) result.selectable.push(distal);
 
     return result;
   } catch (err) {
