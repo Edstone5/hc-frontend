@@ -1596,7 +1596,102 @@ export function addGerminacion(toothDataName, color = 'blue') {
 
 // FUSIÓN ---------------------------------------------------
 
-export function addFusion(toothName, color = 'blue') {
+// ¿El diente forma parte de una fusión ya dibujada? (círculo en el overlay)
+export function toothHasFusion(toothName) {
+  try {
+    const svg = getSvg();
+    if (!svg) return false;
+    const overlay = svg.querySelector('#odontograma-overlay');
+    if (!overlay) return false;
+    const n = String(toothName).trim();
+    return !!overlay.querySelector(`.fusion-circle[data-tooth="${n}"]`);
+  } catch {
+    return false;
+  }
+}
+
+// ¿El diente tiene germinación ya dibujada? (círculo en el overlay)
+export function toothHasGerminacion(toothName) {
+  try {
+    const svg = getSvg();
+    if (!svg) return false;
+    const overlay = svg.querySelector('#odontograma-overlay');
+    if (!overlay) return false;
+    const n = String(toothName).trim();
+    return !!overlay.querySelector(`.germination-circle[data-tooth="${n}"]`);
+  } catch {
+    return false;
+  }
+}
+
+// Analiza los vecinos CONTIGUOS de un diente para la fusión.
+// Clínicamente la fusión solo ocurre entre dos piezas adyacentes, por lo que
+// las únicas posibilidades son el vecino izquierdo (num-0.1) y el derecho
+// (num+0.1) dentro del MISMO cuadrante. Devuelve qué vecinos existen y cuáles
+// están libres (no ocupados por otra fusión).
+export function getFusionCandidates(toothName) {
+  const result = {
+    name: null,
+    left: null,
+    right: null,
+    validLeft: false,
+    validRight: false,
+    leftBusy: false,
+    rightBusy: false,
+    selectable: [], // vecinos válidos y libres
+  };
+  try {
+    if (!toothName || typeof toothName !== 'string') return result;
+    const svg = getSvg();
+    if (!svg) return result;
+    const overlay = ensureOverlay(svg);
+    if (!overlay) return result;
+
+    const name = toothName.trim();
+    const num = parseFloat(name);
+    if (isNaN(num)) return result;
+    result.name = name;
+
+    const left = (num - 0.1).toFixed(1);
+    const right = (num + 0.1).toFixed(1);
+    result.left = left;
+    result.right = right;
+
+    const exists = (n) =>
+      !!(
+        svg.querySelector(`g.tooth-group[data-name="${n}"]`) ||
+        Array.from(svg.querySelectorAll('text.tooth-name')).find(
+          (t) => (t.textContent || '').trim() === n
+        )
+      );
+
+    // El vecino debe pertenecer al mismo cuadrante (mismo dígito entero) para
+    // ser realmente contiguo (p.ej. 1.1 no fusiona con 2.1).
+    const sameQuadrant = (n) => Math.trunc(parseFloat(n)) === Math.trunc(num);
+
+    result.validLeft = exists(left) && sameQuadrant(left);
+    result.validRight = exists(right) && sameQuadrant(right);
+
+    const hasFusionCircle = (d) =>
+      !!overlay.querySelector(`.fusion-circle[data-tooth="${d}"]`);
+    result.leftBusy = result.validLeft && hasFusionCircle(left);
+    result.rightBusy = result.validRight && hasFusionCircle(right);
+
+    if (result.validLeft && !result.leftBusy) result.selectable.push(left);
+    if (result.validRight && !result.rightBusy) result.selectable.push(right);
+
+    return result;
+  } catch (err) {
+    console.error('getFusionCandidates error', err);
+    return result;
+  }
+}
+
+// Dibuja la fusión entre `toothName` y un vecino contiguo EXPLÍCITO.
+// El vecino lo decide el llamador (modal interactivo en el panel, apto para
+// tablet); ya no se usa window.prompt. Si no se pasa vecino, se intenta el
+// único contiguo libre disponible.
+export function addFusion(toothName, color = 'blue', forcedNeighbor = null) {
   try {
     if (!toothName || typeof toothName !== 'string') return false;
 
@@ -1608,80 +1703,38 @@ export function addFusion(toothName, color = 'blue') {
 
     const name = toothName.trim();
 
-    // ============================================
-    // 1) Determinar posibles vecinos (left / right)
-    // ============================================
-    const num = parseFloat(name);
-    if (isNaN(num)) return false;
-
-    const left = (num - 0.1).toFixed(1);
-    const right = (num + 0.1).toFixed(1);
-
-    const exists = (n) =>
-      svg.querySelector(`g.tooth-group[data-name="${n}"]`) ||
-      Array.from(svg.querySelectorAll('text.tooth-name')).find(
-        (t) => (t.textContent || '').trim() === n
-      );
-
-    const validLeft = exists(left);
-    const validRight = exists(right);
-
-    if (!validLeft && !validRight) {
+    const cand = getFusionCandidates(name);
+    if (!cand.validLeft && !cand.validRight) {
       toast.error(`El diente ${name} no tiene dientes vecinos para fusionar.`);
       return false;
     }
 
-    // ===============================================
-    // 2) Verificar si esos dientes YA ESTÁN OCUPADOS
-    // ===============================================
-
-    const hasFusionCircle = (d) =>
-      overlay.querySelector(`.fusion-circle[data-tooth="${d}"]`);
-
-    const leftBusy = validLeft && hasFusionCircle(left);
-    const rightBusy = validRight && hasFusionCircle(right);
-
     let neighbor = null;
-
-    // SI SOLO UNO EXISTE → usamos ese
-    if (validLeft && !validRight) neighbor = left;
-    else if (!validLeft && validRight) neighbor = right;
-    // SI AMBOS EXISTEN
-    else if (validLeft && validRight) {
-      // ⚠️ SI UNO ESTÁ OCUPADO → usar el OTRO automáticamente
-      if (leftBusy && !rightBusy) {
-        neighbor = right;
-      } else if (!leftBusy && rightBusy) {
-        neighbor = left;
-      }
-
-      // ⚠️ SI AMBOS ESTÁN OCUPADOS
-      else if (leftBusy && rightBusy) {
-        toast.error(
-          `Los dientes ${left} y ${right} ya tienen círculos de fusión.`
-        );
+    if (forcedNeighbor) {
+      const fn = String(forcedNeighbor).trim();
+      if (fn !== cand.left && fn !== cand.right) {
+        toast.error(`"${forcedNeighbor}" no es un vecino contiguo de ${name}.`);
         return false;
       }
-
-      // ⚠️ SI NINGUNO ESTÁ OCUPADO → PREGUNTAR
-      else {
-        const choice = prompt(
-          `El diente ${name} puede fusionar con:\n` +
-            `1) ${left}\n` +
-            `2) ${right}\n\n` +
-            `Escribe el número del diente que deseas usar:`
-        );
-
-        if (!choice) return false;
-
-        const normalized = choice.trim();
-        if (normalized === left || normalized === right) {
-          neighbor = normalized;
-        } else {
-          toast.error(`"${choice}" no es un diente válido.`);
-          return false;
-        }
+      const busy =
+        (fn === cand.left && cand.leftBusy) ||
+        (fn === cand.right && cand.rightBusy);
+      if (busy) {
+        toast.error(`El diente ${fn} ya forma parte de otra fusión.`);
+        return false;
       }
+      neighbor = fn;
+    } else if (cand.selectable.length === 1) {
+      neighbor = cand.selectable[0];
+    } else if (cand.selectable.length === 0) {
+      toast.error(
+        `Los vecinos de ${name} ya tienen círculos de fusión o no existen.`
+      );
+      return false;
+    } else {
+      // Ambos libres y sin elección explícita: el panel debe abrir el modal.
+      toast.error(`Elige con qué diente fusionar ${name}.`);
+      return false;
     }
 
     if (!neighbor) return false;
@@ -2593,6 +2646,9 @@ export default {
   addFosasFisurasProfundas,
   addGerminacion,
   addFusion,
+  getFusionCandidates,
+  toothHasFusion,
+  toothHasGerminacion,
   addGiroversion,
   addMissingTooth,
   addDentalProsthesis,

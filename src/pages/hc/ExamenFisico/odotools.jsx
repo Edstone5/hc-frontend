@@ -63,6 +63,8 @@ export default function OdontogramaToolsPanel({
   const [pdaMenuOpen, setPDAMenuOpen] = useState(false);
   const [pdcMenuOpen, setPDCMenuOpen] = useState(false);
   const [clearModalOpen, setClearModalOpen] = useState(false);
+  // Modal de selección de diente contiguo para FUSIÓN ({ tooth, options }|null).
+  const [fusionModal, setFusionModal] = useState(null);
 
   // ── Herramienta de modo interactivo ─────────────────────────────────
   const [activeTool, setActiveTool] = useState(null);
@@ -178,6 +180,10 @@ export default function OdontogramaToolsPanel({
     if (/giroversión\s+izquierda/i.test(label))
       return { g: 'giroversión', v: 'I' };
     if (/^corona/i.test(label)) return { g: 'corona', v: label }; // una corona por pieza
+    // Doble formación (ADR-0024): fusión y germinación son mutuamente excluyentes
+    // en la misma pieza (un diente no puede ser ambas a la vez).
+    if (/fusi[oó]n/i.test(label)) return { g: 'doble formación', v: 'F' };
+    if (/germinaci[oó]n/i.test(label)) return { g: 'doble formación', v: 'G' };
     return null;
   };
 
@@ -557,16 +563,51 @@ export default function OdontogramaToolsPanel({
   };
 
   // 9 — Fusión
+  // La fusión solo es clínicamente posible entre dos piezas CONTIGUAS, así que
+  // las únicas opciones son el vecino izquierdo o el derecho. Si ambos están
+  // libres, se abre un modal interactivo (tab/clic, apto para tablet) para
+  // elegir; si solo hay uno, se usa directo. Exclusión doble formación: un
+  // diente con germinación no puede además ser parte de una fusión.
   const onFusion = () => {
     const tooth = askTooth('Diente para FUSIÓN (ej: 1.7):');
     if (!tooth) return;
-    track('Fusión', tooth, 'blue', () => {
+    if (odontogramaTools.toothHasGerminacion(tooth)) {
+      toast.error(
+        `La pieza ${tooth} tiene germinación: no puede además marcarse como fusión (doble formación). Elimina la germinación primero.`
+      );
+      return;
+    }
+    const cand = odontogramaTools.getFusionCandidates(tooth);
+    if (!cand.validLeft && !cand.validRight) {
+      toast.error(`El diente ${tooth} no tiene dientes vecinos para fusionar.`);
+      return;
+    }
+    if (cand.selectable.length === 0) {
+      toast.error(
+        `Los vecinos contiguos de ${tooth} ya tienen fusión o no existen.`
+      );
+      return;
+    }
+    if (cand.selectable.length === 1) {
+      aplicarFusion(tooth, cand.selectable[0]);
+      return;
+    }
+    // Dos posibilidades contiguas → elegir en modal.
+    setFusionModal({ tooth, options: cand.selectable });
+  };
+
+  const aplicarFusion = (tooth, neighbor) => {
+    setFusionModal(null);
+    if (odontogramaTools.toothHasGerminacion(neighbor)) {
+      toast.error(
+        `La pieza ${neighbor} tiene germinación: no puede fusionarse (doble formación).`
+      );
+      return;
+    }
+    track(`Fusión (${tooth}–${neighbor})`, tooth, 'blue', () => {
       if (typeof odontogramaTools.addFusion === 'function') {
-        const ok = odontogramaTools.addFusion(tooth, 'blue');
-        if (!ok) {
-          toast.error(`No se pudo dibujar fusión en ${tooth}.`);
-          return false;
-        }
+        const ok = odontogramaTools.addFusion(tooth, 'blue', neighbor);
+        if (!ok) return false;
         return true;
       }
       toast.error('addFusion no disponible.');
@@ -575,9 +616,17 @@ export default function OdontogramaToolsPanel({
   };
 
   // 10 — Germinación
+  // Exclusión doble formación: una pieza que ya forma parte de una fusión no
+  // puede además marcarse como germinación.
   const onGerminacion = () => {
     const tooth = askTooth('Diente para GERMINACIÓN (ej: 1.6):');
     if (!tooth) return;
+    if (odontogramaTools.toothHasFusion(tooth)) {
+      toast.error(
+        `La pieza ${tooth} forma parte de una fusión: no puede además marcarse como germinación (doble formación). Elimina la fusión primero.`
+      );
+      return;
+    }
     track('Germinación', tooth, 'blue', () => {
       if (typeof odontogramaTools.addGerminacion === 'function') {
         const ok = odontogramaTools.addGerminacion(tooth, 'blue');
@@ -1673,6 +1722,85 @@ export default function OdontogramaToolsPanel({
           💾 Guardar
         </button>
       </div>
+
+      {/* ── MODAL DE FUSIÓN: elegir diente contiguo (tablet) ── */}
+      {fusionModal && (
+        <div
+          style={{
+            position: 'fixed',
+            inset: 0,
+            zIndex: 200,
+            background: 'rgba(0,0,0,0.38)',
+            display: 'flex',
+            alignItems: 'center',
+            justifyContent: 'center',
+          }}
+        >
+          <div
+            role="dialog"
+            aria-modal="true"
+            aria-label="Elegir diente para la fusión"
+            style={{
+              background: 'white',
+              borderRadius: 12,
+              padding: 24,
+              width: 360,
+              boxShadow: '0 20px 60px rgba(0,0,0,0.22)',
+            }}
+          >
+            <h4
+              style={{
+                margin: '0 0 4px',
+                fontSize: 16,
+                fontWeight: 800,
+                color: '#111827',
+              }}
+            >
+              Fusión de la pieza {fusionModal.tooth}
+            </h4>
+            <p style={{ margin: '0 0 16px', fontSize: 12, color: '#6b7280' }}>
+              La fusión solo es posible entre piezas contiguas. Elige con qué
+              diente vecino se fusiona <strong>{fusionModal.tooth}</strong>:
+            </p>
+            <div style={{ display: 'flex', flexDirection: 'column', gap: 10 }}>
+              {fusionModal.options.map((opt) => (
+                <button
+                  key={opt}
+                  onClick={() => aplicarFusion(fusionModal.tooth, opt)}
+                  style={{
+                    padding: '16px',
+                    borderRadius: 9,
+                    textAlign: 'center',
+                    border: '2px solid #1d4ed8',
+                    background: '#eff6ff',
+                    cursor: 'pointer',
+                    fontSize: 18,
+                    fontWeight: 800,
+                    color: '#1d4ed8',
+                  }}
+                >
+                  Fusionar con {opt}
+                </button>
+              ))}
+              <button
+                onClick={() => setFusionModal(null)}
+                style={{
+                  padding: '11px',
+                  borderRadius: 7,
+                  border: '1px solid #e5e7eb',
+                  background: '#f9fafb',
+                  cursor: 'pointer',
+                  fontSize: 14,
+                  fontWeight: 600,
+                  color: '#374151',
+                }}
+              >
+                Cancelar
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
 
       {/* ── MODAL DE BORRADO ─────────────────────────────── */}
       {clearModalOpen && (
