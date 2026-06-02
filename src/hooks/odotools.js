@@ -1235,6 +1235,49 @@ export function highlightToothBox(toothDataName, color = 'red') {
    - Dibuja marcador y etiqueta en el centro del diente (o cerca)
    - No interfiere con otros modos
    ------------------------------------------------------------------ */
+// Dibuja una etiqueta de texto centrada sobre el diente, en el overlay. Si la
+// pieza YA tiene otras etiquetas centradas, desplaza la nueva verticalmente para
+// evitar el solapamiento visual de tratamientos que sí pueden coexistir
+// (ADR-0033). Devuelve el <text> creado o null.
+function drawCenteredToothLabel(
+  svg,
+  toothDataName,
+  labelText,
+  color,
+  klass,
+  idPrefix
+) {
+  const info = getToothBBox(svg, toothDataName);
+  if (!info) return null;
+  const { bbox } = info;
+  const overlay = ensureOverlay(svg);
+  if (!overlay) return null;
+  const cx = bbox.x + bbox.width / 2;
+  const cy = bbox.y + bbox.height / 2;
+  const fontSize = Math.max(
+    10,
+    Math.min(20, Math.floor(Math.min(bbox.width, bbox.height) * 0.18))
+  );
+  // Cuántas etiquetas centradas ya existen en esta pieza → escalón de desfase.
+  const prior = overlay.querySelectorAll(
+    `.annotation.tooth-label[data-tooth="${toothDataName}"]`
+  ).length;
+  const dy = prior * (fontSize + 2);
+  const text = document.createElementNS('http://www.w3.org/2000/svg', 'text');
+  text.setAttribute('x', String(cx));
+  text.setAttribute('y', String(cy + Math.max(3, fontSize / 3) + dy));
+  text.setAttribute('fill', color);
+  text.setAttribute('font-size', String(fontSize));
+  text.setAttribute('font-weight', '700');
+  text.setAttribute('text-anchor', 'middle');
+  text.setAttribute('class', `annotation tooth-label ${klass}`);
+  text.setAttribute('data-tooth', toothDataName);
+  text.setAttribute('data-id', `${idPrefix}-${toothDataName}-${Date.now()}`);
+  text.textContent = labelText;
+  overlay.appendChild(text);
+  return text;
+}
+
 export function addDefect(toothDataName, defectText = 'O', color = 'red') {
   try {
     const svg = getSvg();
@@ -1302,11 +1345,6 @@ export function addFosasFisurasProfundas(toothDataName, color = 'blue') {
     if (!svg) return false;
     const info = getToothBBox(svg, toothDataName);
     if (!info) return false;
-    const { bbox } = info;
-    const toothCenter = {
-      x: bbox.x + bbox.width / 2,
-      y: bbox.y + bbox.height / 2,
-    };
 
     // Escribir "FFP" en el input del diente (mapeo determinista por DOM).
     const input = inputForToothDOM(svg, toothDataName);
@@ -1316,24 +1354,15 @@ export function addFosasFisurasProfundas(toothDataName, color = 'blue') {
       input.style.color = color;
     }
 
-    // draw a visible "FFP" label on the overlay near the center of the tooth
-    const overlay = ensureOverlay(svg);
-    const text = document.createElementNS('http://www.w3.org/2000/svg', 'text');
-    const fontSize = Math.max(
-      10,
-      Math.min(20, Math.floor(Math.min(bbox.width, bbox.height) * 0.18))
+    // Etiqueta "FFP" sobre el diente, con desfase si la pieza ya tiene etiquetas.
+    drawCenteredToothLabel(
+      svg,
+      toothDataName,
+      'FFP',
+      color,
+      'ffp-label',
+      'ffp'
     );
-    text.setAttribute('x', String(toothCenter.x));
-    // nudge slightly downward so text is visually centered
-    text.setAttribute('y', String(toothCenter.y + Math.max(3, fontSize / 3)));
-    text.setAttribute('fill', color);
-    text.setAttribute('font-size', String(fontSize));
-    text.setAttribute('font-weight', '700');
-    text.setAttribute('text-anchor', 'middle');
-    text.setAttribute('class', 'annotation ffp-label');
-    text.setAttribute('data-id', `ffp-${toothDataName}-${Date.now()}`);
-    text.textContent = 'FFP';
-    overlay.appendChild(text);
 
     return true;
   } catch (err) {
@@ -1354,11 +1383,6 @@ export function addImplant(toothDataName, color = 'red') {
     if (!svg) return false;
     const info = getToothBBox(svg, toothDataName);
     if (!info) return false;
-    const { bbox } = info;
-    const toothCenter = {
-      x: bbox.x + bbox.width / 2,
-      y: bbox.y + bbox.height / 2,
-    };
 
     // Escribir "IMP" en el input del diente (mapeo determinista por DOM).
     const input = inputForToothDOM(svg, toothDataName);
@@ -1368,24 +1392,15 @@ export function addImplant(toothDataName, color = 'red') {
       input.style.color = color;
     }
 
-    // draw a visible "IMP" label on the overlay near the center of the tooth
-    const overlay = ensureOverlay(svg);
-    const text = document.createElementNS('http://www.w3.org/2000/svg', 'text');
-    const fontSize = Math.max(
-      10,
-      Math.min(20, Math.floor(Math.min(bbox.width, bbox.height) * 0.18))
+    // Etiqueta "IMP" sobre el diente, con desfase si la pieza ya tiene etiquetas.
+    drawCenteredToothLabel(
+      svg,
+      toothDataName,
+      'IMP',
+      color,
+      'implant-label',
+      'imp'
     );
-    text.setAttribute('x', String(toothCenter.x));
-    // nudge slightly downward so text is visually centered
-    text.setAttribute('y', String(toothCenter.y + Math.max(3, fontSize / 3)));
-    text.setAttribute('fill', color);
-    text.setAttribute('font-size', String(fontSize));
-    text.setAttribute('font-weight', '700');
-    text.setAttribute('text-anchor', 'middle');
-    text.setAttribute('class', 'annotation implant-label');
-    text.setAttribute('data-id', `imp-${toothDataName}-${Date.now()}`);
-    text.textContent = 'IMP';
-    overlay.appendChild(text);
 
     return true;
   } catch (err) {

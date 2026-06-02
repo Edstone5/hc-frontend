@@ -173,8 +173,11 @@ export default function OdontogramaToolsPanel({
   // etiqueta de tratamiento en { grupo, variante }: dos variantes DISTINTAS del
   // mismo grupo no pueden coexistir en la misma pieza.
   const grupoDe = (label = '') => {
-    if (/macrodoncia/i.test(label)) return { g: 'tamaño', v: 'MAC' };
-    if (/microdoncia/i.test(label)) return { g: 'tamaño', v: 'MIC' };
+    // Anomalías de tamaño/forma de la corona (NTS N° 188-MINSA): una pieza no
+    // puede ser a la vez macrodoncia, microdoncia o clavija (conoide).
+    if (/macrodoncia/i.test(label)) return { g: 'tamaño/forma', v: 'MAC' };
+    if (/microdoncia/i.test(label)) return { g: 'tamaño/forma', v: 'MIC' };
+    if (/clavija/i.test(label)) return { g: 'tamaño/forma', v: 'PC' };
     if (/giroversión\s+derecha/i.test(label))
       return { g: 'giroversión', v: 'D' };
     if (/giroversión\s+izquierda/i.test(label))
