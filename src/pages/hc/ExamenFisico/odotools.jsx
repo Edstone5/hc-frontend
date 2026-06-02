@@ -65,6 +65,10 @@ export default function OdontogramaToolsPanel({
   const [clearModalOpen, setClearModalOpen] = useState(false);
   // Modal de selección de diente contiguo para FUSIÓN ({ tooth, options }|null).
   const [fusionModal, setFusionModal] = useState(null);
+  // Menús de la sección 7 (hallazgos NTS-188 adicionales).
+  const [cariesMenuOpen, setCariesMenuOpen] = useState(false);
+  const [posMenuOpen, setPosMenuOpen] = useState(false);
+  const [endoMenuOpen, setEndoMenuOpen] = useState(false);
 
   // ── Herramienta de modo interactivo ─────────────────────────────────
   const [activeTool, setActiveTool] = useState(null);
@@ -99,6 +103,9 @@ export default function OdontogramaToolsPanel({
     setGiroMenuOpen(false);
     setPDAMenuOpen(false);
     setPDCMenuOpen(false);
+    setCariesMenuOpen(false);
+    setPosMenuOpen(false);
+    setEndoMenuOpen(false);
   };
 
   const toggleMenu = (currentVal, setter) => {
@@ -187,6 +194,20 @@ export default function OdontogramaToolsPanel({
     // en la misma pieza (un diente no puede ser ambas a la vez).
     if (/fusi[oó]n/i.test(label)) return { g: 'doble formación', v: 'F' };
     if (/germinaci[oó]n/i.test(label)) return { g: 'doble formación', v: 'G' };
+    // Caries por severidad (NTS-188 §6.1.16): una lesión tiene una sola severidad.
+    if (/caries/i.test(label)) {
+      const m = label.match(/\b(MB|CDP|CE|CD)\b/);
+      return { g: 'caries-severidad', v: m ? m[1] : 'C' };
+    }
+    // Endodoncia (§6.1.37): TC (conductos) vs PC (pulpectomía) son excluyentes.
+    if (/tratamiento de conductos/i.test(label))
+      return { g: 'endodoncia', v: 'TC' };
+    if (/pulpectom/i.test(label)) return { g: 'endodoncia', v: 'PC' };
+    // Posición anormal (§6.1.28): una pieza tiene una sola dirección anómala.
+    if (/posici[oó]n/i.test(label)) {
+      const m = label.match(/\(([MDVPL])\)/);
+      return { g: 'posición', v: m ? m[1] : 'pos' };
+    }
     return null;
   };
 
@@ -829,6 +850,151 @@ export default function OdontogramaToolsPanel({
         return h;
       }
     );
+  };
+
+  // ════════════════════════════════════════════════════════════════════
+  // 7 · HALLAZGOS NTS N° 188-MINSA/DGIESP-2022 ADICIONALES (ADR-0035)
+  // ════════════════════════════════════════════════════════════════════
+
+  // Handler genérico para hallazgos de tipo "sigla" (escribe el recuadro y dibuja
+  // la etiqueta). Enruta por track (exclusión + registro + desfase visual).
+  const aplicarSigla = (label, sigla, color, tooth) => {
+    if (!tooth) return;
+    track(label, tooth, color, () => {
+      const ok = odontogramaTools.addSiglaHallazgo(tooth, sigla, color);
+      if (!ok) {
+        toast.error(`No se encontró el diente ${tooth}.`);
+        return false;
+      }
+      return true;
+    });
+  };
+
+  // 25-28 — Caries por severidad (rojo)
+  const onCaries = (sigla, nombre) => {
+    setCariesMenuOpen(false);
+    const tooth = askTooth(
+      `Diente para Caries ${nombre} (${sigla}) (ej: 1.6):`
+    );
+    aplicarSigla(`Caries ${nombre} (${sigla})`, sigla, 'red', tooth);
+  };
+
+  // 29 — Espigo muñón (azul/rojo según color activo)
+  const onEspigoMunon = () => {
+    const tooth = askTooth('Diente para Espigo muñón (EM) (ej: 1.6):');
+    if (!tooth) return;
+    const color = askColor();
+    track('Espigo muñón (EM)', tooth, color, () => {
+      const ok = odontogramaTools.addEspigoMunon(tooth, color);
+      if (!ok) {
+        toast.error(`No se encontró el diente ${tooth}.`);
+        return false;
+      }
+      return true;
+    });
+  };
+
+  // 30 — Remanente radicular (RR, rojo)
+  const onRemanente = () => {
+    const tooth = askTooth('Diente para Remanente radicular (RR) (ej: 1.6):');
+    aplicarSigla('Remanente radicular (RR)', 'RR', 'red', tooth);
+  };
+
+  // 31 — Pieza supernumeraria (S, azul)
+  const onSupernumerario = () => {
+    const tooth = askTooth(
+      'Pieza adyacente a la supernumeraria (S) (ej: 1.6):'
+    );
+    if (!tooth) return;
+    track('Supernumeraria (S)', tooth, 'blue', () => {
+      const ok = odontogramaTools.addSupernumerario(tooth, 'blue');
+      if (!ok) {
+        toast.error(`No se encontró el diente ${tooth}.`);
+        return false;
+      }
+      return true;
+    });
+  };
+
+  // 32 — Sellante (S, azul/rojo)
+  const onSellante = () => {
+    const tooth = askTooth('Diente para Sellante (S) (ej: 1.6):');
+    aplicarSigla('Sellante (S)', 'S', askColor(), tooth);
+  };
+
+  // 33 — Superficie desgastada (DES, rojo)
+  const onSuperficieDesgastada = () => {
+    const tooth = askTooth(
+      'Diente para Superficie desgastada (DES) (ej: 1.6):'
+    );
+    aplicarSigla('Superficie desgastada (DES)', 'DES', 'red', tooth);
+  };
+
+  // 34-35 — Endodoncia: TC (conductos) / PC (pulpectomía) (azul/rojo)
+  const onConductos = (sigla, nombre) => {
+    setEndoMenuOpen(false);
+    const tooth = askTooth(`Diente para ${nombre} (${sigla}) (ej: 1.6):`);
+    if (!tooth) return;
+    const color = askColor();
+    track(`${nombre} (${sigla})`, tooth, color, () => {
+      const ok = odontogramaTools.addRootCanalLine(tooth, sigla, color);
+      if (!ok) {
+        toast.error(`No se encontró el diente ${tooth}.`);
+        return false;
+      }
+      return true;
+    });
+  };
+
+  // 36 — Posición anormal dentaria (M/D/V/P/L, azul)
+  const onPosicion = (letra, nombre) => {
+    setPosMenuOpen(false);
+    const tooth = askTooth(
+      `Diente para Posición ${nombre} (${letra}) (ej: 1.6):`
+    );
+    aplicarSigla(`Posición ${nombre} (${letra})`, letra, 'blue', tooth);
+  };
+
+  // 37 — Pieza en erupción (flecha zig-zag azul)
+  const onErupcion = () => {
+    const tooth = askTooth('Diente en erupción (ej: 1.6):');
+    if (!tooth) return;
+    track('Pieza en erupción', tooth, 'blue', () => {
+      const ok = odontogramaTools.addEruptionArrow(tooth, 'blue');
+      if (!ok) {
+        toast.error(`No se encontró el diente ${tooth}.`);
+        return false;
+      }
+      return true;
+    });
+  };
+
+  // 38 — Pieza extruida (flecha recta azul hacia oclusal)
+  const onExtruida = () => {
+    const tooth = askTooth('Diente extruido (ej: 1.6):');
+    if (!tooth) return;
+    track('Pieza extruida', tooth, 'blue', () => {
+      const ok = odontogramaTools.addExtrusionArrow(tooth, 'blue');
+      if (!ok) {
+        toast.error(`No se encontró el diente ${tooth}.`);
+        return false;
+      }
+      return true;
+    });
+  };
+
+  // 39 — Pieza intruida (flecha recta azul hacia ápice)
+  const onIntruida = () => {
+    const tooth = askTooth('Diente intruido (ej: 1.6):');
+    if (!tooth) return;
+    track('Pieza intruida', tooth, 'blue', () => {
+      const ok = odontogramaTools.addIntrusionArrow(tooth, 'blue');
+      if (!ok) {
+        toast.error(`No se encontró el diente ${tooth}.`);
+        return false;
+      }
+      return true;
+    });
   };
 
   // ── Utilidades ────────────────────────────────────────────────────────
@@ -1623,6 +1789,175 @@ export default function OdontogramaToolsPanel({
           onClick={onProtesisPR}
         >
           24. Prótesis Parcial Removible (PPR)
+        </button>
+      </div>
+
+      {/* ════ 7 · OTROS HALLAZGOS (NTS-188) ════ */}
+      <div style={S.sec}>7 · Otros hallazgos (NTS-188)</div>
+      <div style={S.grid2}>
+        {/* Caries por severidad */}
+        <div style={{ position: 'relative' }}>
+          <button
+            style={S.btn}
+            onClick={() => toggleMenu(cariesMenuOpen, setCariesMenuOpen)}
+            aria-expanded={cariesMenuOpen}
+          >
+            25. Caries ▾
+          </button>
+          {cariesMenuOpen && (
+            <div style={S.drop}>
+              <div
+                style={{
+                  fontSize: 11,
+                  fontWeight: 700,
+                  color: '#dc2626',
+                  marginBottom: 6,
+                }}
+              >
+                Severidad (rojo)
+              </div>
+              <div style={{ display: 'flex', flexDirection: 'column', gap: 5 }}>
+                {[
+                  ['MB', 'mancha blanca'],
+                  ['CE', 'en esmalte'],
+                  ['CD', 'en dentina'],
+                  ['CDP', 'dentina + pulpa'],
+                ].map(([sig, nom]) => (
+                  <button
+                    key={sig}
+                    onClick={() => onCaries(sig, nom)}
+                    style={{
+                      padding: '6px 8px',
+                      borderRadius: 5,
+                      border: '1px solid #fca5a5',
+                      background: '#fff5f5',
+                      cursor: 'pointer',
+                      fontSize: 13,
+                      fontWeight: 700,
+                      color: '#dc2626',
+                      textAlign: 'left',
+                    }}
+                  >
+                    {sig} — {nom}
+                  </button>
+                ))}
+              </div>
+            </div>
+          )}
+        </div>
+
+        {/* Endodoncia TC/PC */}
+        <div style={{ position: 'relative' }}>
+          <button
+            style={S.btn}
+            onClick={() => toggleMenu(endoMenuOpen, setEndoMenuOpen)}
+            aria-expanded={endoMenuOpen}
+          >
+            34. Endodoncia ▾
+          </button>
+          {endoMenuOpen && (
+            <div style={{ ...S.drop, display: 'flex', gap: 6 }}>
+              <button
+                onClick={() => onConductos('TC', 'Trat. de conductos')}
+                style={{
+                  flex: 1,
+                  padding: '8px',
+                  borderRadius: 6,
+                  border: '2px solid #1d4ed8',
+                  background: '#eff6ff',
+                  cursor: 'pointer',
+                  color: '#1d4ed8',
+                  fontWeight: 700,
+                  fontSize: 13,
+                }}
+              >
+                TC
+              </button>
+              <button
+                onClick={() => onConductos('PC', 'Pulpectomía')}
+                style={{
+                  flex: 1,
+                  padding: '8px',
+                  borderRadius: 6,
+                  border: '2px solid #1d4ed8',
+                  background: '#eff6ff',
+                  cursor: 'pointer',
+                  color: '#1d4ed8',
+                  fontWeight: 700,
+                  fontSize: 13,
+                }}
+              >
+                PC
+              </button>
+            </div>
+          )}
+        </div>
+
+        {/* Posición anormal */}
+        <div style={{ position: 'relative' }}>
+          <button
+            style={S.btn}
+            onClick={() => toggleMenu(posMenuOpen, setPosMenuOpen)}
+            aria-expanded={posMenuOpen}
+          >
+            36. Posición anormal ▾
+          </button>
+          {posMenuOpen && (
+            <div style={S.drop}>
+              <div style={{ display: 'flex', flexDirection: 'column', gap: 5 }}>
+                {[
+                  ['M', 'mesializado'],
+                  ['D', 'distalizado'],
+                  ['V', 'vestibularizado'],
+                  ['P', 'palatinizado'],
+                  ['L', 'lingualizado'],
+                ].map(([l, nom]) => (
+                  <button
+                    key={l}
+                    onClick={() => onPosicion(l, nom)}
+                    style={{
+                      padding: '6px 8px',
+                      borderRadius: 5,
+                      border: '1px solid #93c5fd',
+                      background: '#eff6ff',
+                      cursor: 'pointer',
+                      fontSize: 13,
+                      fontWeight: 700,
+                      color: '#1d4ed8',
+                      textAlign: 'left',
+                    }}
+                  >
+                    {l} — {nom}
+                  </button>
+                ))}
+              </div>
+            </div>
+          )}
+        </div>
+
+        <button style={S.btn} onClick={onEspigoMunon}>
+          29. Espigo muñón (EM)
+        </button>
+        <button style={S.btn} onClick={onRemanente}>
+          30. Remanente radicular (RR)
+        </button>
+        <button style={S.btn} onClick={onSupernumerario}>
+          31. Supernumeraria (S)
+        </button>
+        <button style={S.btn} onClick={onSellante}>
+          32. Sellante (S)
+        </button>
+        <button style={S.btn} onClick={onSuperficieDesgastada}>
+          33. Superficie desgastada
+        </button>
+        <button style={S.btn} onClick={onErupcion}>
+          37. Pieza en erupción
+        </button>
+        <button style={S.btn} onClick={onExtruida}>
+          38. Pieza extruida
+        </button>
+        <button style={S.btn} onClick={onIntruida}>
+          39. Pieza intruida
         </button>
       </div>
 

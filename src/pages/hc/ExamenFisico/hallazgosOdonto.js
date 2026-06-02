@@ -61,6 +61,30 @@ export const HALLAZGOS_ODONTO = [
   },
   { codigo: 'Ed-S', descripcion: 'Edéntulo superior', estado: 'malo' },
   { codigo: 'Ed-I', descripcion: 'Edéntulo inferior', estado: 'malo' },
+  // ── Hallazgos NTS N° 188-MINSA/DGIESP-2022 añadidos (ADR-0035) ──────────────
+  { codigo: 'MB', descripcion: 'Caries — mancha blanca', estado: 'malo' },
+  { codigo: 'CE', descripcion: 'Caries en esmalte', estado: 'malo' },
+  { codigo: 'CD', descripcion: 'Caries en dentina', estado: 'malo' },
+  {
+    codigo: 'CDP',
+    descripcion: 'Caries en dentina con compromiso pulpar',
+    estado: 'malo',
+  },
+  { codigo: 'EM', descripcion: 'Espigo muñón', estado: 'bueno' },
+  { codigo: 'RR', descripcion: 'Remanente radicular', estado: 'malo' },
+  { codigo: 'SUP', descripcion: 'Pieza supernumeraria', estado: 'malo' },
+  { codigo: 'SELL', descripcion: 'Sellante', estado: 'bueno' },
+  { codigo: 'ERU', descripcion: 'Pieza en erupción', estado: 'neutro' },
+  { codigo: 'EXT', descripcion: 'Pieza extruida', estado: 'malo' },
+  { codigo: 'INT', descripcion: 'Pieza intruida', estado: 'malo' },
+  { codigo: 'POS-M', descripcion: 'Posición: mesializado', estado: 'malo' },
+  { codigo: 'POS-D', descripcion: 'Posición: distalizado', estado: 'malo' },
+  { codigo: 'POS-V', descripcion: 'Posición: vestibularizado', estado: 'malo' },
+  { codigo: 'POS-P', descripcion: 'Posición: palatinizado', estado: 'malo' },
+  { codigo: 'POS-L', descripcion: 'Posición: lingualizado', estado: 'malo' },
+  { codigo: 'DES', descripcion: 'Superficie desgastada', estado: 'malo' },
+  { codigo: 'TC', descripcion: 'Tratamiento de conductos', estado: 'bueno' },
+  { codigo: 'PLPC', descripcion: 'Pulpectomía', estado: 'bueno' },
 ];
 
 // Mapa código → descripción para mostrar en tablas.

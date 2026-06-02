@@ -2586,6 +2586,269 @@ export function addTransposition(color = 'blue', onEnd) {
   return { stop: cleanup };
 }
 
+// ===================================================================
+// HALLAZGOS NTS N° 188-MINSA/DGIESP-2022 ADICIONALES (ADR-0035)
+// ===================================================================
+
+const SVGNS = 'http://www.w3.org/2000/svg';
+const quadrantOf = (name) => parseInt(String(name).charAt(0), 10);
+// En el odontograma, las coronas superiores (cuadrantes 1,2,5,6) apuntan hacia
+// ABAJO (oclusal = mayor Y) y las inferiores (3,4,7,8) hacia ARRIBA.
+const isUpperQuadrant = (q) => q === 1 || q === 2 || q === 5 || q === 6;
+
+// Escribe una sigla en el recuadro (input) del diente y dibuja una etiqueta
+// centrada (con desfase si ya hay etiquetas). Para hallazgos de tipo "sigla":
+// caries (MB/CE/CD/CDP), RR, DES, posición anormal (M/D/V/P/L), sellante, TC/PC.
+export function addSiglaHallazgo(toothDataName, sigla, color = 'red') {
+  try {
+    const svg = getSvg();
+    if (!svg) return false;
+    const info = getToothBBox(svg, toothDataName);
+    if (!info) return false;
+    const input = inputForToothDOM(svg, toothDataName);
+    if (input) {
+      input.value = sigla;
+      input.style.border = `2px solid ${color}`;
+      input.style.color = color;
+    }
+    drawCenteredToothLabel(
+      svg,
+      toothDataName,
+      sigla,
+      color,
+      'sigla-hallazgo',
+      `sig${String(sigla).replace(/[^a-zA-Z]/g, '')}`
+    );
+    return true;
+  } catch (err) {
+    console.error('addSiglaHallazgo error', err);
+    return false;
+  }
+}
+
+// Dibuja una flecha vertical (recta o en zig-zag) con punta, junto a la pieza.
+// headAt: 'occlusal' apunta al plano oclusal/incisal; 'apical' apunta al ápice.
+function drawToothArrow(toothDataName, color, { zigzag = false, headAt }) {
+  const svg = getSvg();
+  if (!svg) return false;
+  const info = getToothBBox(svg, toothDataName);
+  if (!info) return false;
+  const overlay = ensureOverlay(svg);
+  if (!overlay) return false;
+  const { bbox } = info;
+  const x = bbox.x + bbox.width / 2;
+  const q = quadrantOf(toothDataName);
+  const upper = isUpperQuadrant(q);
+  // Borde oclusal y apical de la pieza en coordenadas del gráfico.
+  const occlusalY = upper ? bbox.y + bbox.height : bbox.y;
+  const apicalY = upper ? bbox.y : bbox.y + bbox.height;
+  const len = Math.max(28, bbox.height * 0.8);
+  // La flecha apunta hacia el borde elegido; el extremo de la punta queda en él.
+  const tipY = headAt === 'apical' ? apicalY : occlusalY;
+  const tailY =
+    headAt === 'apical'
+      ? apicalY + (upper ? len : -len)
+      : occlusalY + (upper ? -len : len);
+  const created = [];
+  let shaft;
+  if (zigzag) {
+    shaft = document.createElementNS(SVGNS, 'polyline');
+    const segs = 4;
+    const amp = 5;
+    const pts = [];
+    for (let i = 0; i <= segs; i++) {
+      const t = i / segs;
+      const y = tailY + (tipY - tailY) * t;
+      const xx = x + (i % 2 === 0 ? -amp : amp);
+      pts.push(`${xx},${y}`);
+    }
+    shaft.setAttribute('points', pts.join(' '));
+    shaft.setAttribute('fill', 'none');
+  } else {
+    shaft = document.createElementNS(SVGNS, 'line');
+    shaft.setAttribute('x1', String(x));
+    shaft.setAttribute('y1', String(tailY));
+    shaft.setAttribute('x2', String(x));
+    shaft.setAttribute('y2', String(tipY));
+  }
+  shaft.setAttribute('stroke', color);
+  shaft.setAttribute('stroke-width', '2');
+  shaft.setAttribute('class', 'annotation tooth-arrow');
+  shaft.setAttribute('data-id', `arrow-${toothDataName}-${Date.now()}`);
+  overlay.appendChild(shaft);
+  created.push(shaft);
+  // Punta (triángulo) en el extremo tipY.
+  const dir = tipY >= tailY ? 1 : -1; // hacia dónde "avanza" la flecha
+  const s = 5;
+  const head = document.createElementNS(SVGNS, 'polygon');
+  head.setAttribute(
+    'points',
+    `${x - s},${tipY - dir * s} ${x + s},${tipY - dir * s} ${x},${tipY}`
+  );
+  head.setAttribute('fill', color);
+  head.setAttribute('class', 'annotation tooth-arrow');
+  head.setAttribute('data-id', `arrowhead-${toothDataName}-${Date.now()}`);
+  overlay.appendChild(head);
+  created.push(head);
+  return true;
+}
+
+// §6.1.23 Pieza en erupción — flecha en zig-zag hacia el plano oclusal.
+export function addEruptionArrow(toothDataName, color = 'blue') {
+  return drawToothArrow(toothDataName, color, {
+    zigzag: true,
+    headAt: 'occlusal',
+  });
+}
+
+// §6.1.24 Pieza extruida — flecha recta vertical hacia el plano oclusal.
+export function addExtrusionArrow(toothDataName, color = 'blue') {
+  return drawToothArrow(toothDataName, color, {
+    zigzag: false,
+    headAt: 'occlusal',
+  });
+}
+
+// §6.1.25 Pieza intruida — flecha recta vertical hacia el ápice.
+export function addIntrusionArrow(toothDataName, color = 'blue') {
+  return drawToothArrow(toothDataName, color, {
+    zigzag: false,
+    headAt: 'apical',
+  });
+}
+
+// §6.1.26 Pieza supernumeraria — "S" encerrada en una circunferencia, entre los
+// ápices de las piezas adyacentes (se dibuja sobre la zona apical de la pieza).
+export function addSupernumerario(toothDataName, color = 'blue') {
+  try {
+    const svg = getSvg();
+    if (!svg) return false;
+    const info = getToothBBox(svg, toothDataName);
+    if (!info) return false;
+    const overlay = ensureOverlay(svg);
+    if (!overlay) return false;
+    const { bbox } = info;
+    const q = quadrantOf(toothDataName);
+    const upper = isUpperQuadrant(q);
+    const cx = bbox.x + bbox.width / 2;
+    // Zona apical (donde están los ápices): arriba en superiores, abajo en inf.
+    const cy = upper ? bbox.y - 10 : bbox.y + bbox.height + 10;
+    const r = Math.max(8, Math.min(14, bbox.width * 0.28));
+    const circle = document.createElementNS(SVGNS, 'circle');
+    circle.setAttribute('cx', String(cx));
+    circle.setAttribute('cy', String(cy));
+    circle.setAttribute('r', String(r));
+    circle.setAttribute('fill', 'none');
+    circle.setAttribute('stroke', color);
+    circle.setAttribute('stroke-width', '2');
+    circle.setAttribute('class', 'annotation supernumerario');
+    circle.setAttribute('data-id', `sup-${toothDataName}-${Date.now()}`);
+    overlay.appendChild(circle);
+    const text = document.createElementNS(SVGNS, 'text');
+    text.setAttribute('x', String(cx));
+    text.setAttribute('y', String(cy + r * 0.4));
+    text.setAttribute('fill', color);
+    text.setAttribute('font-size', String(Math.max(9, r)));
+    text.setAttribute('font-weight', '700');
+    text.setAttribute('text-anchor', 'middle');
+    text.setAttribute('class', 'annotation supernumerario');
+    text.setAttribute('data-id', `sup-t-${toothDataName}-${Date.now()}`);
+    text.textContent = 'S';
+    overlay.appendChild(text);
+    return true;
+  } catch (err) {
+    console.error('addSupernumerario error', err);
+    return false;
+  }
+}
+
+// §6.1.8 Espigo muñón — línea vertical en la raíz unida a un cuadrado en la
+// corona. azul = buen estado, rojo = mal estado.
+export function addEspigoMunon(toothDataName, color = 'blue') {
+  try {
+    const svg = getSvg();
+    if (!svg) return false;
+    const info = getToothBBox(svg, toothDataName);
+    if (!info) return false;
+    const overlay = ensureOverlay(svg);
+    if (!overlay) return false;
+    const { bbox } = info;
+    const q = quadrantOf(toothDataName);
+    const upper = isUpperQuadrant(q);
+    const cx = bbox.x + bbox.width / 2;
+    const occlusalY = upper ? bbox.y + bbox.height : bbox.y;
+    const apicalY = upper ? bbox.y : bbox.y + bbox.height;
+    // Línea vertical en la raíz (desde el centro hacia el ápice).
+    const midY = bbox.y + bbox.height / 2;
+    const line = document.createElementNS(SVGNS, 'line');
+    line.setAttribute('x1', String(cx));
+    line.setAttribute('y1', String(midY));
+    line.setAttribute('x2', String(cx));
+    line.setAttribute('y2', String(apicalY));
+    line.setAttribute('stroke', color);
+    line.setAttribute('stroke-width', '2');
+    line.setAttribute('class', 'annotation espigo-munon');
+    line.setAttribute('data-id', `em-l-${toothDataName}-${Date.now()}`);
+    overlay.appendChild(line);
+    // Cuadrado en la corona (lado oclusal).
+    const sq = Math.max(8, Math.min(16, bbox.width * 0.4));
+    const rect = document.createElementNS(SVGNS, 'rect');
+    rect.setAttribute('x', String(cx - sq / 2));
+    rect.setAttribute('y', String(upper ? occlusalY - sq : occlusalY));
+    rect.setAttribute('width', String(sq));
+    rect.setAttribute('height', String(sq));
+    rect.setAttribute('fill', 'none');
+    rect.setAttribute('stroke', color);
+    rect.setAttribute('stroke-width', '2');
+    rect.setAttribute('class', 'annotation espigo-munon');
+    rect.setAttribute('data-id', `em-s-${toothDataName}-${Date.now()}`);
+    overlay.appendChild(rect);
+    return true;
+  } catch (err) {
+    console.error('addEspigoMunon error', err);
+    return false;
+  }
+}
+
+// §6.1.37 Tratamiento de conducto / pulpectomía — línea vertical de color en la
+// raíz + sigla (TC/PC) en el recuadro. azul = buen estado, rojo = mal estado.
+export function addRootCanalLine(toothDataName, sigla = 'TC', color = 'blue') {
+  try {
+    const svg = getSvg();
+    if (!svg) return false;
+    const info = getToothBBox(svg, toothDataName);
+    if (!info) return false;
+    const overlay = ensureOverlay(svg);
+    if (!overlay) return false;
+    const { bbox } = info;
+    const q = quadrantOf(toothDataName);
+    const upper = isUpperQuadrant(q);
+    const cx = bbox.x + bbox.width / 2;
+    const apicalY = upper ? bbox.y : bbox.y + bbox.height;
+    const midY = bbox.y + bbox.height / 2;
+    const line = document.createElementNS(SVGNS, 'line');
+    line.setAttribute('x1', String(cx));
+    line.setAttribute('y1', String(midY));
+    line.setAttribute('x2', String(cx));
+    line.setAttribute('y2', String(apicalY));
+    line.setAttribute('stroke', color);
+    line.setAttribute('stroke-width', '2');
+    line.setAttribute('class', 'annotation root-canal');
+    line.setAttribute('data-id', `rc-${toothDataName}-${Date.now()}`);
+    overlay.appendChild(line);
+    const input = inputForToothDOM(svg, toothDataName);
+    if (input) {
+      input.value = sigla;
+      input.style.border = `2px solid ${color}`;
+      input.style.color = color;
+    }
+    return true;
+  } catch (err) {
+    console.error('addRootCanalLine error', err);
+    return false;
+  }
+}
+
 // LESION
 
 // Default export (compatibilidad)
@@ -2622,4 +2885,12 @@ export default {
   addPPF,
   addPulpotomy,
   addTransposition,
+  // Hallazgos NTS-188 adicionales (ADR-0035)
+  addSiglaHallazgo,
+  addEruptionArrow,
+  addExtrusionArrow,
+  addIntrusionArrow,
+  addSupernumerario,
+  addEspigoMunon,
+  addRootCanalLine,
 };
