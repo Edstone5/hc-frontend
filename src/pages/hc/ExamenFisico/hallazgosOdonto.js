@@ -85,6 +85,26 @@ export const HALLAZGOS_ODONTO = [
   { codigo: 'DES', descripcion: 'Superficie desgastada', estado: 'malo' },
   { codigo: 'TC', descripcion: 'Tratamiento de conductos', estado: 'bueno' },
   { codigo: 'PLPC', descripcion: 'Pulpectomía', estado: 'bueno' },
+  // Restauración definitiva por material (§6.1.33): AM/R/IV/IM/IE (azul). R ya está
+  // arriba como resina; O/Io se conservan como legados de "obturación".
+  { codigo: 'AM', descripcion: 'Restauración con amalgama', estado: 'bueno' },
+  {
+    codigo: 'IV',
+    descripcion: 'Restauración con ionómero de vidrio',
+    estado: 'bueno',
+  },
+  {
+    codigo: 'IM',
+    descripcion: 'Restauración — incrustación metálica',
+    estado: 'bueno',
+  },
+  {
+    codigo: 'IE',
+    descripcion: 'Restauración — incrustación estética',
+    estado: 'bueno',
+  },
+  // Restauración temporal (§6.1.34): contorno en rojo (provisional).
+  { codigo: 'RT', descripcion: 'Restauración temporal', estado: 'malo' },
 ];
 
 // Mapa código → descripción para mostrar en tablas.

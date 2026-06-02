@@ -69,6 +69,7 @@ export default function OdontogramaToolsPanel({
   const [cariesMenuOpen, setCariesMenuOpen] = useState(false);
   const [posMenuOpen, setPosMenuOpen] = useState(false);
   const [endoMenuOpen, setEndoMenuOpen] = useState(false);
+  const [restMenuOpen, setRestMenuOpen] = useState(false);
 
   // ── Herramienta de modo interactivo ─────────────────────────────────
   const [activeTool, setActiveTool] = useState(null);
@@ -106,6 +107,7 @@ export default function OdontogramaToolsPanel({
     setCariesMenuOpen(false);
     setPosMenuOpen(false);
     setEndoMenuOpen(false);
+    setRestMenuOpen(false);
   };
 
   const toggleMenu = (currentVal, setter) => {
@@ -207,6 +209,13 @@ export default function OdontogramaToolsPanel({
     if (/posici[oó]n/i.test(label)) {
       const m = label.match(/\(([MDVPL])\)/);
       return { g: 'posición', v: m ? m[1] : 'pos' };
+    }
+    // Restauración por material (§6.1.33): en este registro por-sigla se admite una
+    // sola restauración por pieza. AM/R/IV/IM/IE (definitivas) y RT (temporal) son
+    // mutuamente excluyentes. Multi-char antes que R para no capturarla parcialmente.
+    if (/restauraci[oó]n/i.test(label)) {
+      const m = label.match(/\b(AM|IV|IM|IE|RT|R)\b/);
+      return { g: 'restauración', v: m ? m[1] : 'rest' };
     }
     return null;
   };
@@ -995,6 +1004,17 @@ export default function OdontogramaToolsPanel({
       }
       return true;
     });
+  };
+
+  // 40 — Restauración por material (§6.1.33): definitiva (AM/R/IV/IM/IE, azul) o
+  // temporal (RT, rojo). En este registro por-sigla se escribe la sigla del material
+  // en el recuadro del diente, conforme a la norma.
+  const onRestauracion = (sigla, nombre, color) => {
+    setRestMenuOpen(false);
+    const tooth = askTooth(
+      `Diente para Restauración ${nombre} (${sigla}) (ej: 1.6):`
+    );
+    aplicarSigla(`Restauración ${nombre} (${sigla})`, sigla, color, tooth);
   };
 
   // ── Utilidades ────────────────────────────────────────────────────────
@@ -1842,6 +1862,85 @@ export default function OdontogramaToolsPanel({
                   </button>
                 ))}
               </div>
+            </div>
+          )}
+        </div>
+
+        {/* Restauración por material (§6.1.33) */}
+        <div style={{ position: 'relative' }}>
+          <button
+            style={S.btn}
+            onClick={() => toggleMenu(restMenuOpen, setRestMenuOpen)}
+            aria-expanded={restMenuOpen}
+          >
+            40. Restauración ▾
+          </button>
+          {restMenuOpen && (
+            <div style={S.drop}>
+              <div
+                style={{
+                  fontSize: 11,
+                  fontWeight: 700,
+                  color: '#1d4ed8',
+                  marginBottom: 6,
+                }}
+              >
+                Definitiva — material (azul)
+              </div>
+              <div style={{ display: 'flex', flexDirection: 'column', gap: 5 }}>
+                {[
+                  ['AM', 'con amalgama'],
+                  ['R', 'con resina'],
+                  ['IV', 'con ionómero de vidrio'],
+                  ['IM', 'incrustación metálica'],
+                  ['IE', 'incrustación estética'],
+                ].map(([sig, nom]) => (
+                  <button
+                    key={sig}
+                    onClick={() => onRestauracion(sig, nom, 'blue')}
+                    style={{
+                      padding: '6px 8px',
+                      borderRadius: 5,
+                      border: '1px solid #93c5fd',
+                      background: '#eff6ff',
+                      cursor: 'pointer',
+                      fontSize: 13,
+                      fontWeight: 700,
+                      color: '#1d4ed8',
+                      textAlign: 'left',
+                    }}
+                  >
+                    {sig} — {nom}
+                  </button>
+                ))}
+              </div>
+              <div
+                style={{
+                  fontSize: 11,
+                  fontWeight: 700,
+                  color: '#dc2626',
+                  margin: '8px 0 6px',
+                }}
+              >
+                Temporal (rojo)
+              </div>
+              <button
+                onClick={() => onRestauracion('RT', 'temporal', 'red')}
+                style={{
+                  width: '100%',
+                  padding: '6px 8px',
+                  borderRadius: 5,
+                  border: '1px solid #fca5a5',
+                  background: '#fff5f5',
+                  cursor: 'pointer',
+                  fontSize: 13,
+                  fontWeight: 700,
+                  color: '#dc2626',
+                  textAlign: 'left',
+                }}
+              >
+                RT — restauración temporal
+              </button>
             </div>
           )}
         </div>
