@@ -844,36 +844,10 @@ export function startCoronaMode(crownType = 'CM', color = 'blue') {
   return { stop: cleanup };
 }
 
-// small helper to create "hand drawn" polyline points with slight jitter along perpendicular
-function makeScribblePolylinePoints(
-  x1,
-  y1,
-  x2,
-  y2,
-  segments = 6,
-  jitter = 1.2,
-  perpendicularOffset = 0
-) {
-  const pts = [];
-  const vx = x2 - x1;
-  const vy = y2 - y1;
-  const len = Math.hypot(vx, vy) || 1;
-  const px = -vy / len;
-  const py = vx / len;
-  for (let i = 0; i <= segments; i++) {
-    const t = i / segments;
-    const cx = x1 + vx * t;
-    const cy = y1 + vy * t;
-    const jitterAmt =
-      (Math.sin(i * 2.3) * 0.5 + (Math.random() - 0.5) * 0.6) * jitter;
-    const ox = px * (perpendicularOffset + jitterAmt);
-    const oy = py * (perpendicularOffset + jitterAmt);
-    pts.push(`${cx + ox},${cy + oy}`);
-  }
-  return pts.join(' ');
-}
-
-// addDiastemaAtPoint: draws a stylized X (scribble) centered at (x,y)
+// addDiastemaAtPoint: dibuja el "paréntesis invertido" )( de la diastema centrado
+// en (x,y), conforme a la NTS N° 188-MINSA/DGIESP-2022 §6.1.6 (antes se dibujaba
+// una X, que no corresponde a la norma). Son dos arcos con las panzas enfrentadas,
+// pensados para colocarse entre las dos piezas dentarias con diastema.
 export function addDiastemaAtPoint(
   svg,
   x,
@@ -881,74 +855,37 @@ export function addDiastemaAtPoint(
   color = 'blue',
   sizeX = 18,
   sizeY = 44,
-  strokeWidth = 1
+  strokeWidth = 2
 ) {
   try {
     const overlay = ensureOverlay(svg);
     const idBase = `diastema-${Date.now()}`;
     const created = [];
+    const NS = 'http://www.w3.org/2000/svg';
 
-    const ax1 = x - sizeX,
-      ay1 = y - sizeY;
-    const ax2 = x + sizeX,
-      ay2 = y + sizeY;
-    const offsetsA = [-1.5, 0, 1.5];
-    for (let i = 0; i < offsetsA.length; i++) {
-      const pts = makeScribblePolylinePoints(
-        ax1,
-        ay1,
-        ax2,
-        ay2,
-        6,
-        1.0,
-        offsetsA[i]
-      );
-      const poly = document.createElementNS(
-        'http://www.w3.org/2000/svg',
-        'polyline'
-      );
-      poly.setAttribute('points', pts);
-      poly.setAttribute('fill', 'none');
-      poly.setAttribute('stroke', color);
-      poly.setAttribute('stroke-width', String(strokeWidth));
-      poly.setAttribute('stroke-linecap', 'round');
-      poly.setAttribute('stroke-linejoin', 'round');
-      poly.setAttribute('class', 'annotation diastema scribble');
-      poly.setAttribute('data-id', `${idBase}-a-${i}`);
-      overlay.appendChild(poly);
-      created.push(poly);
-    }
+    const half = sizeY / 2;
+    const gap = Math.max(8, sizeX); // separación horizontal entre los dos arcos
+    const bow = Math.max(6, sizeX * 0.7); // curvatura de cada arco
 
-    const bx1 = x + sizeX,
-      by1 = y - sizeY;
-    const bx2 = x - sizeX,
-      by2 = y + sizeY;
-    const offsetsB = [1.5, 0, -1.5];
-    for (let i = 0; i < offsetsB.length; i++) {
-      const pts = makeScribblePolylinePoints(
-        bx1,
-        by1,
-        bx2,
-        by2,
-        6,
-        1.0,
-        offsetsB[i]
-      );
-      const poly = document.createElementNS(
-        'http://www.w3.org/2000/svg',
-        'polyline'
-      );
-      poly.setAttribute('points', pts);
-      poly.setAttribute('fill', 'none');
-      poly.setAttribute('stroke', color);
-      poly.setAttribute('stroke-width', String(strokeWidth));
-      poly.setAttribute('stroke-linecap', 'round');
-      poly.setAttribute('stroke-linejoin', 'round');
-      poly.setAttribute('class', 'annotation diastema scribble');
-      poly.setAttribute('data-id', `${idBase}-b-${i}`);
-      overlay.appendChild(poly);
-      created.push(poly);
-    }
+    // ")" a la izquierda (panza hacia el centro) y "(" a la derecha (panza hacia
+    // el centro) → forman el paréntesis invertido ")(".
+    const arcs = [
+      `M ${x - gap} ${y - half} Q ${x - gap + bow} ${y} ${x - gap} ${y + half}`,
+      `M ${x + gap} ${y - half} Q ${x + gap - bow} ${y} ${x + gap} ${y + half}`,
+    ];
+
+    arcs.forEach((d, i) => {
+      const path = document.createElementNS(NS, 'path');
+      path.setAttribute('d', d);
+      path.setAttribute('fill', 'none');
+      path.setAttribute('stroke', color);
+      path.setAttribute('stroke-width', String(Math.max(2, strokeWidth)));
+      path.setAttribute('stroke-linecap', 'round');
+      path.setAttribute('class', 'annotation diastema');
+      path.setAttribute('data-id', `${idBase}-${i}`);
+      overlay.appendChild(path);
+      created.push(path);
+    });
 
     return { elements: created, id: idBase };
   } catch (err) {
@@ -959,7 +896,7 @@ export function addDiastemaAtPoint(
 
 /*
   startDiastemaMode(color, sizeX, sizeY, strokeWidth, onDone)
-  - dibuja UNA X al primer click y se detiene automáticamente
+  - dibuja el paréntesis invertido )( de la diastema al primer click y se detiene
   - onDone({ cancelled, x, y }) se llama al terminar
 */
 export function startDiastemaMode(

@@ -548,7 +548,7 @@ export default function OdontogramaToolsPanel({
       const h = odontogramaTools.startDiastemaMode('blue', 18, 44, 1, (res) =>
         onEnd(res && !res.cancelled)
       );
-      toast('Haz clic donde colocar la "X" azul. ESC = salir.');
+      toast('Haz clic entre las dos piezas para el diastema )( . ESC = salir.');
       return h;
     });
   };
