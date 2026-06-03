@@ -24,7 +24,7 @@ const ESTADOS = [
   },
 ];
 
-function EvaluacionFicha({ idHistory, ficha }) {
+function EvaluacionFicha({ idHistory, ficha, puedeEvaluar }) {
   const { data: ev } = useFichaEvaluacion(idHistory, ficha.id_ficha);
   const { mutate: evaluar, isPending } = useEvaluarFicha();
   const [form, setForm] = useState({
@@ -152,7 +152,7 @@ function EvaluacionFicha({ idHistory, ficha }) {
             </Button>
           </div>
         </div>
-      ) : (
+      ) : puedeEvaluar ? (
         <button
           onClick={() => {
             setEditando(true);
@@ -166,6 +166,10 @@ function EvaluacionFicha({ idHistory, ficha }) {
         >
           {ev ? 'Editar evaluación' : 'Evaluar ficha'}
         </button>
+      ) : (
+        !ev && (
+          <span className="text-sm text-gray-400">Pendiente de evaluación</span>
+        )
       )}
     </div>
   );
@@ -175,7 +179,7 @@ export default function FichaEvaluacion() {
   const { id } = useParams();
   const { data: user } = useCurrentUser();
   const { data: fichas = [], isLoading } = useFichasOperacion(id);
-  const esDocente = user?.role === 'docente';
+  const esDocente = user?.role === 'docente' || user?.role === 'admin';
 
   if (isLoading) return <div className="p-8 text-center">Cargando...</div>;
 
@@ -196,7 +200,12 @@ export default function FichaEvaluacion() {
           </p>
         ) : (
           fichas.map((f) => (
-            <EvaluacionFicha key={f.id_ficha} idHistory={id} ficha={f} />
+            <EvaluacionFicha
+              key={f.id_ficha}
+              idHistory={id}
+              ficha={f}
+              puedeEvaluar={esDocente}
+            />
           ))
         )}
       </div>

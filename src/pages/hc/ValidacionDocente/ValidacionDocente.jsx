@@ -1,4 +1,4 @@
-import { useState } from 'react';
+import { useState, useEffect, useCallback } from 'react';
 import { useParams } from 'react-router';
 import toast from 'react-hot-toast';
 import { CheckCircle, XCircle } from 'lucide-react';
@@ -7,14 +7,42 @@ import { useCurrentUser } from '@hooks/useAuth';
 
 const API = import.meta.env.VITE_API_URL;
 
+const ESTADO_STYLE = {
+  Aprobada: 'bg-green-50 text-green-700 border-green-200',
+  Rechazada: 'bg-red-50 text-red-700 border-red-200',
+  'Requiere corrección': 'bg-amber-50 text-amber-700 border-amber-200',
+  Pendiente: 'bg-gray-50 text-gray-600 border-gray-200',
+};
+
 export default function ValidacionDocente() {
   const { id } = useParams();
   const { data: user } = useCurrentUser();
   const [form, setForm] = useState({ state: 'Aprobada', observations: '' });
   const [saving, setSaving] = useState(false);
-  const [done, setDone] = useState(false);
+  const [reviews, setReviews] = useState([]);
+  const [loadingReviews, setLoadingReviews] = useState(true);
 
-  const esDocente = user?.role === 'docente';
+  // Docente y admin pueden registrar validaciones; el estudiante solo las ve.
+  const puedeValidar = user?.role === 'docente' || user?.role === 'admin';
+
+  const cargarRevisiones = useCallback(async () => {
+    setLoadingReviews(true);
+    try {
+      const r = await fetch(`${API}/hc/${id}/reviews`, {
+        credentials: 'include',
+      });
+      if (!r.ok) throw new Error('No se pudieron cargar las revisiones');
+      setReviews(await r.json());
+    } catch {
+      setReviews([]);
+    } finally {
+      setLoadingReviews(false);
+    }
+  }, [id]);
+
+  useEffect(() => {
+    cargarRevisiones();
+  }, [cargarRevisiones]);
 
   const handleSubmit = async () => {
     if (!form.observations.trim())
@@ -33,7 +61,8 @@ export default function ValidacionDocente() {
       });
       if (!r.ok) throw new Error((await r.json()).error || 'Error');
       toast.success('Revisión registrada correctamente');
-      setDone(true);
+      setForm({ state: 'Aprobada', observations: '' });
+      cargarRevisiones();
     } catch (e) {
       toast.error(e.message);
     } finally {
@@ -41,47 +70,32 @@ export default function ValidacionDocente() {
     }
   };
 
-  if (!esDocente)
-    return (
-      <div className="p-8 text-center text-gray-400">
-        Solo los docentes pueden registrar validaciones.
-      </div>
-    );
+  const fmtFecha = (f) => {
+    if (!f) return '';
+    const d = new Date(f);
+    return isNaN(d) ? String(f) : d.toLocaleString();
+  };
 
   return (
     <div className="w-full rounded-lg shadow-sm border border-gray-100 bg-white">
       <div className="bg-[var(--color-primary)] text-white px-8 py-5 rounded-t-lg">
         <h2 className="text-2xl font-bold">Validación Docente</h2>
         <p className="text-sm opacity-80 mt-1">
-          Registra tu revisión y retroalimentación de esta historia clínica
+          {puedeValidar
+            ? 'Registra tu revisión y consulta el historial de validaciones'
+            : 'Aquí ves la retroalimentación y el estado de validación de tu historia clínica'}
         </p>
       </div>
 
-      <div className="p-8">
-        {done ? (
-          <div className="text-center py-12">
-            <CheckCircle size={48} className="mx-auto text-green-500 mb-4" />
-            <h3 className="text-lg font-bold text-green-700">
-              Revisión registrada
-            </h3>
-            <p className="text-gray-500 mt-2">
-              La revisión ha sido guardada correctamente.
-            </p>
-            <Button
-              onClick={() => setDone(false)}
-              variant="secondary"
-              className="mt-4"
-            >
-              Registrar otra revisión
-            </Button>
-          </div>
-        ) : (
-          <div className="max-w-2xl mx-auto space-y-5">
+      <div className="p-8 space-y-8">
+        {/* Formulario: solo docente/admin */}
+        {puedeValidar && (
+          <div className="max-w-2xl space-y-5">
             <fieldset>
               <legend className="block font-semibold text-gray-700 mb-2">
                 Estado de la revisión
               </legend>
-              <div className="flex gap-3">
+              <div className="flex flex-wrap gap-3">
                 {[
                   {
                     v: 'Aprobada',
@@ -142,6 +156,51 @@ export default function ValidacionDocente() {
             </div>
           </div>
         )}
+
+        {/* Historial de revisiones: visible para todos */}
+        <div>
+          <h3 className="font-semibold text-gray-700 mb-3">
+            Historial de validaciones
+          </h3>
+          {loadingReviews ? (
+            <p className="text-gray-400 text-sm">Cargando…</p>
+          ) : reviews.length === 0 ? (
+            <p className="text-gray-400 text-sm">
+              Aún no hay validaciones registradas para esta historia clínica.
+            </p>
+          ) : (
+            <ul className="space-y-3">
+              {reviews.map((rev) => (
+                <li
+                  key={rev.id_revision}
+                  className="border border-gray-200 rounded-lg p-4"
+                >
+                  <div className="flex items-center justify-between gap-3 mb-2">
+                    <span
+                      className={`px-2 py-0.5 rounded-full text-xs font-medium border ${ESTADO_STYLE[rev.estado] || 'bg-gray-50 text-gray-600 border-gray-200'}`}
+                    >
+                      {rev.estado || 'Sin estado'}
+                    </span>
+                    <span className="text-xs text-gray-400">
+                      {fmtFecha(rev.fecha)}
+                    </span>
+                  </div>
+                  {rev.observaciones && (
+                    <p className="text-sm text-gray-700 whitespace-pre-wrap">
+                      {rev.observaciones}
+                    </p>
+                  )}
+                  <p className="text-xs text-gray-400 mt-2">
+                    Docente:{' '}
+                    {`${rev.docente_nombre ?? ''} ${rev.docente_apellido ?? ''}`.trim() ||
+                      rev.docente_codigo ||
+                      '—'}
+                  </p>
+                </li>
+              ))}
+            </ul>
+          )}
+        </div>
       </div>
     </div>
   );
