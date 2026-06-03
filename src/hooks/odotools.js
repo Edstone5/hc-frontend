@@ -2627,8 +2627,15 @@ export function addSiglaHallazgo(toothDataName, sigla, color = 'red') {
 }
 
 // Dibuja una flecha vertical (recta o en zig-zag) con punta, junto a la pieza.
-// headAt: 'occlusal' apunta al plano oclusal/incisal; 'apical' apunta al ápice.
-function drawToothArrow(toothDataName, color, { zigzag = false, headAt }) {
+// mode (NTS N° 188-MINSA/DGIESP-2022):
+//   'eruption'  (§6.1.23) zig-zag hacia el plano oclusal/incisal.
+//   'extrusion' (§6.1.24) recta FUERA del borde oclusal, apuntando hacia AFUERA
+//               (sentido de la sobre-erupción).
+//   'intrusion' (§6.1.25) recta FUERA del borde oclusal, apuntando HACIA el diente
+//               (sentido apical/intrusivo).
+// Ambas rectas se dibujan del lado oclusal y se distinguen por el sentido de la
+// punta, conforme a las figuras oficiales de la norma.
+function drawToothArrow(toothDataName, color, { zigzag = false, mode }) {
   const svg = getSvg();
   if (!svg) return false;
   const info = getToothBBox(svg, toothDataName);
@@ -2639,16 +2646,24 @@ function drawToothArrow(toothDataName, color, { zigzag = false, headAt }) {
   const x = bbox.x + bbox.width / 2;
   const q = quadrantOf(toothDataName);
   const upper = isUpperQuadrant(q);
-  // Borde oclusal y apical de la pieza en coordenadas del gráfico.
+  // Borde oclusal/incisal de la pieza y sentido "hacia afuera" (más allá del borde).
   const occlusalY = upper ? bbox.y + bbox.height : bbox.y;
-  const apicalY = upper ? bbox.y : bbox.y + bbox.height;
+  const outward = upper ? 1 : -1;
   const len = Math.max(28, bbox.height * 0.8);
-  // La flecha apunta hacia el borde elegido; el extremo de la punta queda en él.
-  const tipY = headAt === 'apical' ? apicalY : occlusalY;
-  const tailY =
-    headAt === 'apical'
-      ? apicalY + (upper ? len : -len)
-      : occlusalY + (upper ? -len : len);
+  let tailY, tipY;
+  if (mode === 'extrusion') {
+    // Fuera del borde oclusal, la punta apunta hacia afuera (alejándose del diente).
+    tailY = occlusalY;
+    tipY = occlusalY + outward * len;
+  } else if (mode === 'intrusion') {
+    // Fuera del borde oclusal, la punta apunta hacia el diente (hacia apical).
+    tailY = occlusalY + outward * len;
+    tipY = occlusalY;
+  } else {
+    // Erupción: zig-zag desde el interior de la corona hacia el borde oclusal.
+    tailY = occlusalY - outward * len;
+    tipY = occlusalY;
+  }
   const created = [];
   let shaft;
   if (zigzag) {
@@ -2697,23 +2712,23 @@ function drawToothArrow(toothDataName, color, { zigzag = false, headAt }) {
 export function addEruptionArrow(toothDataName, color = 'blue') {
   return drawToothArrow(toothDataName, color, {
     zigzag: true,
-    headAt: 'occlusal',
+    mode: 'eruption',
   });
 }
 
-// §6.1.24 Pieza extruida — flecha recta vertical hacia el plano oclusal.
+// §6.1.24 Pieza extruida — flecha recta fuera del borde oclusal hacia afuera.
 export function addExtrusionArrow(toothDataName, color = 'blue') {
   return drawToothArrow(toothDataName, color, {
     zigzag: false,
-    headAt: 'occlusal',
+    mode: 'extrusion',
   });
 }
 
-// §6.1.25 Pieza intruida — flecha recta vertical hacia el ápice.
+// §6.1.25 Pieza intruida — flecha recta fuera del borde oclusal hacia el diente.
 export function addIntrusionArrow(toothDataName, color = 'blue') {
   return drawToothArrow(toothDataName, color, {
     zigzag: false,
-    headAt: 'apical',
+    mode: 'intrusion',
   });
 }
 
